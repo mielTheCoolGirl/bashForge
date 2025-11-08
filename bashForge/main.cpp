@@ -11,7 +11,6 @@ std::string pwd()
 	char buff[size];
 	if (_getcwd(buff, size) != NULL)
 	{
-		std::cout << buff << "\n";
 		return buff;
 	}
 }
@@ -23,7 +22,7 @@ void ls()
 void analyse_input(std::string input)
 {
 	if (input.find("pwd") != std::string::npos)
-		pwd();
+		std::cout << pwd() << "\n";
 	else
 		ls();
 
