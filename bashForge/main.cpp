@@ -142,10 +142,14 @@ void ls(char flag)
 		}	
 		break;
 	}
+
 	default:
 	{
 		for (const auto& entry : std::filesystem::directory_iterator(path))
-			std::cout << entry.path().filename().string() << std::endl;
+			if (entry.path().filename().string().front() != '.'&& flag!='a')
+				std::cout << entry.path().filename().string() << std::endl;
+			else if(flag=='a')
+				std::cout << entry.path().filename().string() << std::endl;
 	}
 
 	}
