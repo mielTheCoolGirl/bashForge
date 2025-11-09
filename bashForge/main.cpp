@@ -151,6 +151,15 @@ void ls(char flag)
 	}
 }
 
+void whoami()
+{
+	const char* user = std::getenv("USERNAME");
+	if (user)
+		std::cout << user << "\n";
+	else
+		std::cout << "Unknown" << "\n";
+}
+
 char parseFlag(std::string input)
 {
 	return input[4]; //currently hardcoded, fix later to find flag after -
@@ -170,7 +179,8 @@ void analyse_input(std::string input)
 		std::cout << pwd() << "\n";
 	if (input.find("ls") != std::string::npos)
 		ls(flag);
-
+	if (!(input.compare("whoami")))
+		whoami();
 
 }
 
