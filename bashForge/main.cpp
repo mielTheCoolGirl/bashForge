@@ -34,7 +34,10 @@ std::string totalAmountInPathKB(std::string path)
 	return std::to_string(sumOfBlocks);
 }
 
-
+bool compareByTime(const std::filesystem::directory_entry& first, const std::filesystem::directory_entry& last)
+{
+	return std::filesystem::last_write_time(first) > std::filesystem::last_write_time(last);
+}
 void ls(std::string flag,std::string path) //path is optional, only for recursion
 {
 	if(path.length() == 0)
@@ -75,6 +78,9 @@ void ls(std::string flag,std::string path) //path is optional, only for recursio
 		if (showHidden || entry.path().filename().string().front() != '.')
 			entries.push_back(entry);
 	}
+	if (timeSort)
+		std::sort(entries.begin(), entries.end(),compareByTime);
+	
 	if (reverse)
 		std::reverse(entries.begin(), entries.end());
 	if (longListing)
@@ -99,6 +105,7 @@ void ls(std::string flag,std::string path) //path is optional, only for recursio
 
 		}
 	}
+	
 	if (recursive)
 	{
 		for (const auto& entry : entries)
