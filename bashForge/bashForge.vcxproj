@@ -130,10 +130,12 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="EnvironmentUsers.cpp" />
+    <ClCompile Include="FileData.cpp" />
     <ClCompile Include="main.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="EnvironmentUsers.h" />
+    <ClInclude Include="FileData.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
