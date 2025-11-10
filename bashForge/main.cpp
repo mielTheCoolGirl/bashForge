@@ -17,43 +17,86 @@ std::string pwd()
 
 std::string totalAmountInPathKB(std::string path)
 {
-	int sumOfBytes = 0;
+	//in the unix filesys the "total" in a sum of all of its blocks, a block is (size+511)/512
+	int sumOfBlocks = 0,currSize=0;
+	int typicalDirBlockSize = 4096;
 	for (const auto& entry : std::filesystem::directory_iterator(path))
-		sumOfBytes += std::filesystem::file_size(entry.path());
-	return std::to_string(sumOfBytes / 1000);
+	{
+		if (entry.is_regular_file())
+			currSize = std::filesystem::file_size(entry.path());
+		else if (entry.is_directory())
+			currSize = typicalDirBlockSize;
+		sumOfBlocks += (currSize + 511) / 512;
+	}
+		
+	return std::to_string(sumOfBlocks);
 }
 
 
-void ls(char flag)
+void ls(std::string flag)
 {
 	std::string path = pwd();
-	switch(flag)
+	if (flag.length() == 0)
 	{
-	case 'l':
-	{
-		std::cout << "Total " << totalAmountInPathKB(path)<<"\n";
 		for (const auto& entry : std::filesystem::directory_iterator(path))
+			if (entry.path().filename().string().front() != '.')
+				std::cout << entry.path().filename().string() << std::endl;
+	}
+	bool longListing = false, humanReadable = false, allFiles = false , recursive=false,reverse=false,timeSort=false;
+	for (char part : flag)
+	{
+		switch (part)
 		{
-			FileData currFile(entry.path());
-			std::cout<<currFile.collectFilePremissions();
-		}	
-		break;
+			case 'l':
+			{/*
+				std::cout << "Total " << totalAmountInPathKB(path) << "\n";
+				for (const auto& entry : std::filesystem::directory_iterator(path))
+				{
+					FileData currFile(entry.path(), 'l');
+					std::cout << currFile.collectFilePremissions();
+				}
+				*/
+				longListing = true;
+				break;
+			}
+			case 'h':
+			{
+				humanReadable = true;
+				break;
+			}
+			
+			case 'R':
+			{
+				recursive = true;
+				break;
+			}
+			case 'r':
+			{
+				reverse = true;
+				break;
+			}
+			case 't':
+			{
+				timeSort = true;
+				break;
+			}
+			default:
+			{
+				std::cout << "Error in flag naming, please check for typos\n";
+				return;
+			}
+		}
+		if (humanReadable && longListing)
+		{
+			std::cout << "Total " << totalAmountInPathKB(path) << "\n";
+				for (const auto& entry : std::filesystem::directory_iterator(path))
+				{
+					FileData currFile(entry.path(), 'h');
+					std::cout << currFile.collectFilePremissions();
+				}
+		}
 	}
-	case 'h':
-	{
 
-		break;
-	}
-	default:
-	{
-		for (const auto& entry : std::filesystem::directory_iterator(path))
-			if (entry.path().filename().string().front() != '.'&& flag!='a')
-				std::cout << entry.path().filename().string() << std::endl;
-			else if(flag=='a')
-				std::cout << entry.path().filename().string() << std::endl;
-	}
-
-	}
 }
 
 void whoami()
@@ -65,14 +108,14 @@ void whoami()
 		std::cout << "Unknown" << "\n";
 }
 
-char parseFlag(std::string input)
+std::string parseFlag(std::string input)
 {
-	return input[4]; //currently hardcoded, fix later to find flag after -
+	return input.substr(input.find("-") + 1); ; //currently hardcoded, fix later to find flag after -
 }
 
 void analyse_input(std::string input)
 {
-	char flag;
+	std::string flag;
 	if (input.length() > 3)//TODO: LATER CHECKS WILL NOT CHECK BY LENGTH BUT BY A MAP OF COMMANDS
 	{
 		flag = parseFlag(input);

@@ -17,8 +17,10 @@ private:
 	std::string owner, group;
 	std::string time;
 	size_t fileSize;
+	std::string humanReadableFormat();
+	char flag;
 public:
-	FileData(std::filesystem::path path);
+	FileData(std::filesystem::path path,char flag);
 	void makePremissions();
 	void findOwnerAndGroup();
 	void getFullTime();

@@ -2,8 +2,25 @@
 
 #include "FileData.h"
 
-FileData::FileData(std::filesystem::path path)
+std::string FileData::humanReadableFormat()
 {
+	const char* suffix[] = {"B","KB","MB","GB","T"}; //the suffixes for byte megabyte ect'
+	double size = this->fileSize;
+	int resBytes=0;
+	int i = 0;
+	while (size >= 1024 &&i<std::size(suffix)-1)
+	{
+		size /= 1024;
+		i++;
+	}
+	std::ostringstream out;
+	out << std::fixed << std::setprecision(0) << size<<suffix[i];
+	return out.str();
+}
+
+FileData::FileData(std::filesystem::path path,char flag)
+{
+	this->flag = flag;
 	this->path = path;
 	this->fileSize = std::filesystem::file_size(path);
 	this->isdir=std::filesystem::is_directory(path);
@@ -110,7 +127,10 @@ void FileData::countLinks()
 
 std::string FileData::collectFilePremissions()
 {
-	std::string premissions;
-	premissions += this->permissions + " " + std::to_string(numOfLinks) +" " + this->owner + " " + this->group +" " + std::to_string(fileSize) + " " + time + "\t" + path.filename().string() + "\n";
+	std::string premissions="";
+	premissions = this->permissions + " " + std::to_string(numOfLinks) + " " + this->owner + " " + this->group + " " + std::to_string(fileSize) + " " + time + "\t" + path.filename().string() + "\n";
+	if(flag=='h')
+		premissions = this->permissions + " " + std::to_string(numOfLinks) + " " + this->owner + " " + this->group + " " + humanReadableFormat() + " " + time + "\t" + path.filename().string() + "\n";
+	
 	return premissions;
 }
