@@ -35,9 +35,10 @@ std::string totalAmountInPathKB(std::string path)
 }
 
 
-void ls(std::string flag)
+void ls(std::string flag,std::string path) //path is optional, only for recursion
 {
-	std::string path = pwd();
+	if(path.length() == 0)
+		path = pwd();
 	if (flag.length() == 0)
 	{
 		for (const auto& entry : std::filesystem::directory_iterator(path))
@@ -45,11 +46,12 @@ void ls(std::string flag)
 				std::cout << entry.path().filename().string() << std::endl;
 		return;
 	}
-	bool longListing = false, humanReadable = false, allFiles = false , recursive=false,reverse=false,timeSort=false;
+	bool showHidden = false, longListing = false, humanReadable = false, allFiles = false, recursive = false, reverse = false, timeSort = false;
 	for (char part : flag)
 	{
 		switch (part)
 		{
+		case 'a':showHidden = true; break;
 		case 'l': longListing = true; break;
 
 		case 'h':	humanReadable = true; break;
@@ -70,10 +72,8 @@ void ls(std::string flag)
 	std::vector<std::filesystem::directory_entry> entries;
 	for (const auto& entry : std::filesystem::directory_iterator(path))
 	{
-		if (entry.path().filename().string().front() != '.')
-		{
+		if (showHidden || entry.path().filename().string().front() != '.')
 			entries.push_back(entry);
-		}
 	}
 	if (reverse)
 		std::reverse(entries.begin(), entries.end());
@@ -94,11 +94,22 @@ void ls(std::string flag)
 		}
 		else
 		{
-			if (entry.path().filename().string().front() != '.')
+			if (showHidden || entry.path().filename().string().front() != '.')
 				std::cout << entry.path().filename().string() << std::endl;
+
 		}
 	}
-
+	if (recursive)
+	{
+		for (const auto& entry : entries)
+		{
+			if (entry.is_directory())
+			{
+				std::cout << "\n" << entry.path().filename().string() << ":\n";
+				ls("R",entry.path().string());
+			}
+		}
+	}
 }
 
 void whoami()
@@ -141,13 +152,13 @@ void analyse_input(std::string input)
 					throw(NO_DASH_FOUND);
 			}
 				
-			ls(flag);
+			ls(flag,"");
 
 		}
 
-		else if (!(input.compare("whoami")))
+		else if (input.find("whoami") != std::string::npos)
 		{
-			if (input.length() > 6)
+			if (input.length() != 6)
 				throw(INVALID_CMD_SYNTAX);
 			whoami();
 		}
