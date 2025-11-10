@@ -1,5 +1,7 @@
 #define _CRT_SECURE_NO_WARNINGS
-
+#define INVALID_CMD_SYNTAX 5
+#define NO_DASH_FOUND -1
+#define CMD_DOESNT_EXIST 0
 #include "FileData.h"
 
 
@@ -120,15 +122,50 @@ void analyse_input(std::string input)
 {
 	std::string flag;
 	flag = parseFlag(input);
-	if (input.find("pwd") != std::string::npos)
-		std::cout << pwd() << "\n";
-	else if (input.find("ls") != std::string::npos)
-		ls(flag);
-	else if (!(input.compare("whoami")))
-		whoami();
-	else
-		std::cout << "error, invalid command\n";
+	try
+	{
+		if (input.find("pwd") != std::string::npos)
+		{
+			if (input.length() > 3)
+				throw(INVALID_CMD_SYNTAX);
+			std::cout << pwd() << "\n";
+		}
 
+		else if (input.find("ls") != std::string::npos)
+		{
+			if (input.length() == 3)
+				throw(INVALID_CMD_SYNTAX);
+			if (input.length() > 3)
+			{
+				if (input[3] != '-')//if the is no - placement for command
+					throw(NO_DASH_FOUND);
+			}
+				
+			ls(flag);
+
+		}
+
+		else if (!(input.compare("whoami")))
+		{
+			if (input.length() > 6)
+				throw(INVALID_CMD_SYNTAX);
+			whoami();
+		}
+			
+
+		else
+			throw(CMD_DOESNT_EXIST);
+
+	}
+	catch (int errCode)
+	{
+		switch (errCode)
+		{
+		case -1: std::cout << "No - found for command, retype your command\n"; break;
+		case 5:std::cout << "Invalid command synthax\n"; break;
+
+		}
+	}
 }
 
 int main()
