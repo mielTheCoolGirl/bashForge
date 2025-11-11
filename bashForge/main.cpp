@@ -17,6 +17,67 @@ std::string pwd()
 	return "";
 }
 
+void echo(std::string echoStr, std::string flag)
+{
+	bool interpretEscapes = true;
+	bool newLine = true;
+	for (char part : flag)
+	{
+		switch (part)
+		{
+		case 'E': interpretEscapes = false; break;
+		case 'e': interpretEscapes = true; break;
+		case 'n': newLine = false; break;
+		default:
+		{
+			std::cout << "Error in flag naming, please check for typos\n";
+			return;
+		}
+		}
+	}
+
+	if (!interpretEscapes)
+	{
+		std::cout << echoStr;
+		if (newLine) std::cout << "\n";
+		return;
+	}
+	for (size_t i = 0; i < echoStr.size(); ++i)
+	{
+		if ((i - 1) >= 0)
+		{
+			if ((echoStr[i] == 't' || echoStr[i] == 'n') && echoStr[i - 1] == '\\')
+			{
+				switch (echoStr[i]) //-e means that we implement any \n and not treat them as regular strs, we remove the last printed \ char and make a new like\tab
+				{
+					++i;
+				case('n'):std::cout << "\b " << '\n'; break;
+				case('t'):std::cout << "\b " << '\t'; break;
+				default:std::cout << echoStr[i]; break;
+				}
+
+			}
+
+			else
+			{
+				std::cout << echoStr[i]; 
+			}
+
+		}
+		
+		else
+		{
+			std::cout << echoStr[i];
+		}
+		
+
+	}
+	if (newLine)
+		std::cout << "\n";
+
+
+}
+
 std::string totalAmountInPathKB(std::string path)
 {
 	//in the unix filesys the "total" in a sum of all of its blocks, a block is (size+511)/512
@@ -56,13 +117,9 @@ void ls(std::string flag,std::string path) //path is optional, only for recursio
 		{
 		case 'a':showHidden = true; break;
 		case 'l': longListing = true; break;
-
 		case 'h':	humanReadable = true; break;
-
 		case 'R':recursive = true; break;
-
 		case 'r': reverse = true; break;
-
 		case 't':timeSort = true; break;
 
 		default:
@@ -72,7 +129,7 @@ void ls(std::string flag,std::string path) //path is optional, only for recursio
 		}
 		}
 	}
-	std::vector<std::filesystem::directory_entry> entries;
+	std::vector<std::filesystem::directory_entry> entries;//get all files in dir
 	for (const auto& entry : std::filesystem::directory_iterator(path))
 	{
 		if (showHidden || entry.path().filename().string().front() != '.')
@@ -131,10 +188,13 @@ void whoami()
 
 std::string parseFlag(std::string input)
 {
-	bool findFlag = input.find("-")!=input.npos;
-	if (!findFlag)
+	size_t dashIndex = input.find("-");
+	if (dashIndex == input.npos)
 		return "";
-	return input.substr(input.find("-") + 1);
+	size_t spaceIndex= input.find(" ",dashIndex);
+	if (spaceIndex == input.npos)
+		return input.substr(dashIndex + 1);
+	return input.substr(dashIndex+1,spaceIndex-dashIndex-1);
 }
 
 void analyse_input(std::string input)
@@ -179,7 +239,32 @@ void analyse_input(std::string input)
 			std::cout << moveCursorBack+clearScreen+clearScrollBack<<std::flush;
 		}
 			
+		else if (input.find("echo") != std::string::npos)
+		{
+			std::string inputed;
+			size_t afterSpace= input.find(' '); //find the flag after the space
+			
+			if (afterSpace == std::string::npos)
+				throw(INVALID_CMD_SYNTAX);
 
+			inputed = input.substr(afterSpace+1);
+			if (!inputed.empty() && inputed[0] == '-')
+			{
+				size_t afterSpaceFlagPos = inputed.find(" ");
+				if (afterSpaceFlagPos != std::string::npos)
+				{
+					flag = inputed.substr(1,afterSpaceFlagPos-1);
+					inputed = inputed.substr(afterSpaceFlagPos+1);
+				}
+				else
+				{
+					flag = inputed.substr(1);
+					inputed = "";
+				}
+			}
+			
+			echo(inputed,flag);
+		}
 		else
 			throw(CMD_DOESNT_EXIST);
 
