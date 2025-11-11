@@ -108,6 +108,7 @@ void ls(std::string flag,std::string path) //path is optional, only for recursio
 	
 	if (recursive)
 	{
+		//call recursively ls until there are no more directories inside the directories
 		for (const auto& entry : entries)
 		{
 			if (entry.is_directory())
@@ -168,6 +169,14 @@ void analyse_input(std::string input)
 			if (input.length() != 6)
 				throw(INVALID_CMD_SYNTAX);
 			whoami();
+		}
+
+		else if (input.find("clear") != std::string::npos)
+		{
+			std::string moveCursorBack = "\033[H",clearScreen="\033[2J",clearScrollBack="\033[3J";
+			if (input.length() != 5)
+				throw(INVALID_CMD_SYNTAX);
+			std::cout << moveCursorBack+clearScreen+clearScrollBack<<std::flush;
 		}
 			
 
