@@ -4,6 +4,54 @@
 #define CMD_DOESNT_EXIST 0
 #include "FileData.h"
 
+std::vector<std::string> getCmdSyntax(const std::string& input)
+{
+	if (input.empty())
+		throw CMD_DOESNT_EXIST;
+
+	std::vector<std::string> cmd;
+	std::stringstream stringStream(input);
+	std::string currCmd;
+
+	while (getline(stringStream, currCmd, ' '))
+		cmd.push_back(currCmd);
+
+	if (cmd.empty())
+		throw CMD_DOESNT_EXIST;
+
+	std::vector<std::string> finalCmd;
+	std::string combinedFlag = "";
+
+	finalCmd.push_back(cmd[0]); // command itself
+
+	bool endFlags = false;
+	int i = 1;
+
+	// collect all flags starting with '-'
+	while (i < cmd.size())
+	{
+		if (!cmd[i].empty() && cmd[i][0] == '-')
+			combinedFlag += cmd[i].substr(1);
+		else
+			break;
+		i++;
+		
+	}
+	if (!combinedFlag.empty())
+		combinedFlag = "-" + combinedFlag;
+
+	finalCmd.push_back(combinedFlag);
+
+	// add all remaining arguments
+	while (i < cmd.size())
+	{
+		finalCmd.push_back(cmd[i]);
+		i++;
+	}
+
+	return finalCmd;
+}
+
 
 //function shows current directory
 std::string pwd()
@@ -23,6 +71,7 @@ void echo(std::string echoStr, std::string flag)
 	bool newLine = true;
 	for (char part : flag)
 	{
+		if (part == '-') continue; 
 		switch (part)
 		{
 		case 'E': interpretEscapes = false; break;
@@ -113,6 +162,7 @@ void ls(std::string flag,std::string path) //path is optional, only for recursio
 	bool showHidden = false, longListing = false, humanReadable = false, allFiles = false, recursive = false, reverse = false, timeSort = false;
 	for (char part : flag)
 	{
+		if (part == '-') continue;
 		switch (part)
 		{
 		case 'a':showHidden = true; break;
@@ -186,82 +236,69 @@ void whoami()
 		std::cout << "Unknown" << "\n";
 }
 
-std::string parseFlag(std::string input)
-{
-	size_t dashIndex = input.find("-");
-	if (dashIndex == input.npos)
-		return "";
-	size_t spaceIndex= input.find(" ",dashIndex);
-	if (spaceIndex == input.npos)
-		return input.substr(dashIndex + 1);
-	return input.substr(dashIndex+1,spaceIndex-dashIndex-1);
-}
 
 void analyse_input(std::string input)
 {
+	std::vector<std::string> cmdRes = getCmdSyntax(input);
 	std::string flag;
-	flag = parseFlag(input);
+	if (cmdRes[1][0] == '-')
+		flag = cmdRes[1];
+	else
+		flag = "";
+	
 	try
 	{
-		if (input.find("pwd") != std::string::npos)
+		if (cmdRes[0] == "pwd")
 		{
-			if (input.length() > 3)
-				throw(INVALID_CMD_SYNTAX);
+			if (cmdRes.size() > 1)
+				throw INVALID_CMD_SYNTAX;
 			std::cout << pwd() << "\n";
 		}
 
-		else if (input.find("ls") != std::string::npos)
+		else if (cmdRes[0] == "ls")
 		{
-			if (input.length() == 3)
-				throw(INVALID_CMD_SYNTAX);
-			if (input.length() > 3)
-			{
-				if (input[3] != '-')//if the is no - placement for command
-					throw(NO_DASH_FOUND);
-			}
+			if (cmdRes.size() > 1 && cmdRes[1][0] != '-')
+				throw NO_DASH_FOUND;
 				
 			ls(flag,"");
 
 		}
 
-		else if (input.find("whoami") != std::string::npos)
+		else if (cmdRes[0] == "whoami")
 		{
-			if (input.length() != 6)
-				throw(INVALID_CMD_SYNTAX);
+			if (cmdRes.size() > 1)
+				throw INVALID_CMD_SYNTAX;
 			whoami();
 		}
 
-		else if (input.find("clear") != std::string::npos)
+		else if (cmdRes[0] == "clear")
 		{
+			if (cmdRes.size() > 1)
+				throw INVALID_CMD_SYNTAX;
 			std::string moveCursorBack = "\033[H",clearScreen="\033[2J",clearScrollBack="\033[3J";
-			if (input.length() != 5)
-				throw(INVALID_CMD_SYNTAX);
 			std::cout << moveCursorBack+clearScreen+clearScrollBack<<std::flush;
 		}
 			
-		else if (input.find("echo") != std::string::npos)
+		else if (cmdRes[0] == "echo")
 		{
 			std::string inputed;
-			size_t afterSpace= input.find(' '); //find the flag after the space
-			
-			if (afterSpace == std::string::npos)
-				throw(INVALID_CMD_SYNTAX);
-
-			inputed = input.substr(afterSpace+1);
-			if (!inputed.empty() && inputed[0] == '-')
+			size_t startIdx=(flag.empty()?1:2);
+			if(startIdx >= cmdRes.size())
 			{
-				size_t afterSpaceFlagPos = inputed.find(" ");
-				if (afterSpaceFlagPos != std::string::npos)
+				inputed = ""; 
+			}
+			else
+			{
+				for (size_t i = startIdx; i < cmdRes.size(); ++i)
 				{
-					flag = inputed.substr(1,afterSpaceFlagPos-1);
-					inputed = inputed.substr(afterSpaceFlagPos+1);
-				}
-				else
-				{
-					flag = inputed.substr(1);
-					inputed = "";
+					inputed += cmdRes[i];
+					if (i != cmdRes.size() - 1)
+						inputed += " "; // preserve spaces
 				}
 			}
+			if (cmdRes.size() > 1 && cmdRes[1][0] != '-')
+				throw NO_DASH_FOUND;
+			
 			
 			echo(inputed,flag);
 		}
