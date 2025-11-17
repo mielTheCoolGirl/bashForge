@@ -2,6 +2,8 @@
 #define INVALID_CMD_SYNTAX 5
 #define NO_DASH_FOUND -1
 #define CMD_DOESNT_EXIST 0
+#define NO_SUCH_FILE -2
+#define UNABLE_TO_GET_FT -3
 #include "FileData.h"
 #include <fstream>
 
@@ -54,6 +56,60 @@ std::vector<std::string> getCmdSyntax(const std::string& input)
 	return finalCmd;
 }
 
+void touch(std::string flag, std::string fileToCreate,std::string fileWithNewTS)
+{
+	bool changeAccessTime=false,changeModTime=false,dontCreateNonExistsing=false,useDate=false,useTime=false,useFilesTS=false,affectSymLinks=false;
+	LPCSTR lpstr = fileToCreate.c_str();
+	for (char part : flag)
+	{
+		if (part == '-') continue;
+		switch (part)
+		{
+			case 'a': changeAccessTime = true; break;
+			case 'm': changeModTime = true; break;
+			case 'c': dontCreateNonExistsing = true; break;
+			case 'd': useDate = true; break;
+			case 't': useTime = true; break;
+			case 'r': useFilesTS = true; break;
+			case 'h': affectSymLinks = true; break;
+			default:
+			{
+				std::cout << "Error in flag naming, please check for typos\n";
+				return;
+			}
+		}
+	}
+	if (changeAccessTime ||changeModTime)
+	{
+		HANDLE hFile = CreateFileA(lpstr,
+			FILE_WRITE_ATTRIBUTES | GENERIC_READ,//these perms are for reading the file and being able to change mod time
+			FILE_SHARE_READ | FILE_SHARE_WRITE,
+			NULL,
+			OPEN_EXISTING,
+			FILE_ATTRIBUTE_NORMAL,
+			NULL);
+		if (hFile == INVALID_HANDLE_VALUE)
+			throw NO_SUCH_FILE;
+		FILETIME ftCreate, ftAcess, ftWrite;
+		if (!(GetFileTime(hFile, &ftCreate, &ftAcess, &ftWrite)))
+		{
+			CloseHandle(hFile);
+			throw UNABLE_TO_GET_FT;
+		}
+
+		SYSTEMTIME fileSysTime;
+		GetLocalTime(&fileSysTime);
+		//IF CHANGE ACESS TIME
+		ftAcess = fileSysTime;  //TO DO, FIX THIS BUG
+		if (!SetFileTime(hFile,NULL, &ftAcess,&ftWrite))
+		{
+			CloseHandle(hFile);
+			//TO DO: MAKE ECEPTION FOR GETTING TIME
+		}
+		//TO DO : DO THE SAME WITH MOD TIME
+	}
+	CreateFileA(lpstr,GENERIC_WRITE,0,NULL,CREATE_ALWAYS,FILE_ATTRIBUTE_NORMAL,NULL);
+}
 
 //function shows current directory
 std::string pwd()
@@ -237,7 +293,7 @@ void cat(std::string flag, std::string file)
 	std::ifstream fileToCat(file);
 	if (!fileToCat.is_open())
 	{
-		std::cout << " No such file or directory\n";
+		throw NO_SUCH_FILE;
 	}
 	for (char part : flag)
 	{
@@ -448,6 +504,33 @@ void analyse_input(std::string input)
 				throw INVALID_CMD_SYNTAX;
 				
 		}
+		else if (cmdRes[0] == "touch")
+		{
+			switch (cmdRes.size())
+			{
+			case 2:
+			{
+				if (flag != "")
+					throw INVALID_CMD_SYNTAX;
+				touch(flag, cmdRes[1], "");
+				break;
+			}
+			case 3:
+			{
+				if (flag == "")
+					throw NO_DASH_FOUND;
+				touch(flag, cmdRes[2], "");
+			}
+			case 4:
+			{
+				if (flag == "")
+					throw NO_DASH_FOUND;
+				touch(flag, cmdRes[2], cmdRes[3]);
+			}
+			default:throw INVALID_CMD_SYNTAX;
+			}
+			
+		}
 		else if (cmdRes[0] == "exit")
 		{
 			return;
@@ -463,6 +546,8 @@ void analyse_input(std::string input)
 		case NO_DASH_FOUND: std::cout << "No - found for command, retype your command\n"; break;
 		case INVALID_CMD_SYNTAX: std::cout << "Invalid command synthax\n"; break;
 		case CMD_DOESNT_EXIST: std::cout << "Error, command doesnt exist!\n"; break;
+		case NO_SUCH_FILE: std::cout << "No such file or directory\n"; break;
+		case UNABLE_TO_GET_FT: std::cout << "Unable to get file time from file, please try again\n"; break;
 		}
 	}
 }
