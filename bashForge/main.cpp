@@ -257,13 +257,38 @@ void cat(std::string flag, std::string file)
 	}
 	std::string currLine;
 	int counter = 1;
+	if (numberLines && numberNonBlanks)
+	{
+		numberLines = false; //since the -b flag always overrides the -n flag
+	}
 	while (std::getline(fileToCat, currLine))
 	{
-		if(numberLines)
-			std::cout << counter<<" " << currLine << std::endl;
+		if (showLineEndings)
+		{
+			currLine += "$";
+		}
+		
+		if (numberLines)
+		{
+			std::cout << counter << " " << currLine << std::endl;
+			counter++;
+		}
+		else if (numberNonBlanks)
+		{
+			if(showLineEndings && currLine == "$")
+				std::cout << currLine << std::endl;
+			else if (currLine != "")
+			{
+				std::cout << counter << " " << currLine << std::endl;
+				counter++;
+			}
+			else
+				std::cout<< currLine << std::endl;
+		}
+			
 		else
 			std::cout << currLine << std::endl;
-		counter++;
+		
 	}
 }
 
@@ -346,7 +371,23 @@ void analyse_input(std::string input)
 		}
 		else if (cmdRes[0] == "cat")
 		{
-			cat(flag, cmdRes[2]);
+			if (cmdRes.size() < 2)
+				throw INVALID_CMD_SYNTAX;
+			if (cmdRes.size() == 2)
+			{
+				if (flag != "")
+					throw INVALID_CMD_SYNTAX;
+				cat(flag, cmdRes[1]);
+			}
+			else if (cmdRes.size() == 3)
+			{
+				if (flag == "")
+					throw NO_DASH_FOUND;
+				cat(flag, cmdRes[2]);
+			}
+			else
+				throw INVALID_CMD_SYNTAX;
+				
 		}
 		else
 			throw(CMD_DOESNT_EXIST);
