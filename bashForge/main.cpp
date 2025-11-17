@@ -4,6 +4,7 @@
 #define CMD_DOESNT_EXIST 0
 #define NO_SUCH_FILE -2
 #define UNABLE_TO_GET_FT -3
+#define UNABLE_TO_SET_FT -4
 #include "FileData.h"
 #include <fstream>
 
@@ -58,7 +59,8 @@ std::vector<std::string> getCmdSyntax(const std::string& input)
 
 void touch(std::string flag, std::string fileToCreate,std::string fileWithNewTS)
 {
-	bool changeAccessTime=false,changeModTime=false,dontCreateNonExistsing=false,useDate=false,useTime=false,useFilesTS=false,affectSymLinks=false;
+	bool changeAccessTime=false,changeModTime=false, dontCreateNonExisting=false,useDate=false,useTime=false,useFilesTS=false,affectSymLinks=false;
+
 	LPCSTR lpstr = fileToCreate.c_str();
 	for (char part : flag)
 	{
@@ -67,7 +69,7 @@ void touch(std::string flag, std::string fileToCreate,std::string fileWithNewTS)
 		{
 			case 'a': changeAccessTime = true; break;
 			case 'm': changeModTime = true; break;
-			case 'c': dontCreateNonExistsing = true; break;
+			case 'c': dontCreateNonExisting = true; break;
 			case 'd': useDate = true; break;
 			case 't': useTime = true; break;
 			case 'r': useFilesTS = true; break;
@@ -79,17 +81,44 @@ void touch(std::string flag, std::string fileToCreate,std::string fileWithNewTS)
 			}
 		}
 	}
+	HANDLE hFile= INVALID_HANDLE_VALUE;//set the default to be invalid
+	
+
 	if (changeAccessTime ||changeModTime)
 	{
-		HANDLE hFile = CreateFileA(lpstr,
-			FILE_WRITE_ATTRIBUTES | GENERIC_READ,//these perms are for reading the file and being able to change mod time
-			FILE_SHARE_READ | FILE_SHARE_WRITE,
-			NULL,
-			OPEN_EXISTING,
-			FILE_ATTRIBUTE_NORMAL,
-			NULL);
+		
+		if(!dontCreateNonExisting)
+		{
+			hFile = CreateFileA(lpstr,
+				FILE_WRITE_ATTRIBUTES | GENERIC_READ,//these perms are for reading the file and being able to change mod time
+				FILE_SHARE_READ | FILE_SHARE_WRITE,
+				NULL,
+				OPEN_EXISTING,
+				FILE_ATTRIBUTE_NORMAL,
+				NULL);
+
+		}
+		else
+		{
+			if (GetFileAttributesA(lpstr) != INVALID_FILE_ATTRIBUTES)
+			{
+				hFile = CreateFileA(lpstr,
+					FILE_WRITE_ATTRIBUTES | GENERIC_READ,//these perms are for reading the file and being able to change mod time
+					FILE_SHARE_READ | FILE_SHARE_WRITE,
+					NULL,
+					OPEN_EXISTING,
+					FILE_ATTRIBUTE_NORMAL,
+					NULL);
+			}
+			else
+				return;
+			
+		}
 		if (hFile == INVALID_HANDLE_VALUE)
+		{
 			throw NO_SUCH_FILE;
+		}
+			
 		FILETIME ftCreate, ftAcess, ftWrite;
 		if (!(GetFileTime(hFile, &ftCreate, &ftAcess, &ftWrite)))
 		{
@@ -99,16 +128,66 @@ void touch(std::string flag, std::string fileToCreate,std::string fileWithNewTS)
 
 		SYSTEMTIME fileSysTime;
 		GetLocalTime(&fileSysTime);
-		//IF CHANGE ACESS TIME
-		ftAcess = fileSysTime;  //TO DO, FIX THIS BUG
-		if (!SetFileTime(hFile,NULL, &ftAcess,&ftWrite))
+		if (changeAccessTime)
 		{
-			CloseHandle(hFile);
-			//TO DO: MAKE ECEPTION FOR GETTING TIME
+			if (!(SystemTimeToFileTime(&fileSysTime, &ftAcess)))
+			{
+				CloseHandle(hFile);
+				throw UNABLE_TO_SET_FT;
+			}
+			if (!SetFileTime(hFile, NULL, &ftAcess, &ftWrite))
+			{
+				CloseHandle(hFile);
+				throw UNABLE_TO_GET_FT;
+			}
 		}
-		//TO DO : DO THE SAME WITH MOD TIME
+		if(changeModTime)
+		{
+			if (!(SystemTimeToFileTime(&fileSysTime, &ftWrite)))
+			{
+				CloseHandle(hFile);
+				throw UNABLE_TO_SET_FT;
+			}
+			if (!SetFileTime(hFile, NULL, &ftAcess, &ftWrite))
+			{
+				CloseHandle(hFile);
+				throw UNABLE_TO_GET_FT;
+			}
+		}
+		
+		CloseHandle(hFile);
 	}
-	CreateFileA(lpstr,GENERIC_WRITE,0,NULL,CREATE_ALWAYS,FILE_ATTRIBUTE_NORMAL,NULL);
+	else
+	{
+		if (!dontCreateNonExisting)
+		{
+			hFile = CreateFileA(lpstr, GENERIC_WRITE, 0, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+			if (hFile == INVALID_HANDLE_VALUE)
+			{
+				throw NO_SUCH_FILE;
+			}
+			CloseHandle(hFile);
+		}
+		else
+		{
+			if (GetFileAttributesA(lpstr) != INVALID_FILE_ATTRIBUTES)
+			{
+				hFile = CreateFileA(lpstr,
+					FILE_WRITE_ATTRIBUTES | GENERIC_READ,//these perms are for reading the file and being able to change mod time
+					FILE_SHARE_READ | FILE_SHARE_WRITE,
+					NULL,
+					OPEN_EXISTING,
+					FILE_ATTRIBUTE_NORMAL,
+					NULL);
+				CloseHandle(hFile);
+			}
+			else
+				return;
+
+		}
+		
+	}
+	
 }
 
 //function shows current directory
@@ -520,12 +599,14 @@ void analyse_input(std::string input)
 				if (flag == "")
 					throw NO_DASH_FOUND;
 				touch(flag, cmdRes[2], "");
+				break;
 			}
 			case 4:
 			{
 				if (flag == "")
 					throw NO_DASH_FOUND;
 				touch(flag, cmdRes[2], cmdRes[3]);
+				break;
 			}
 			default:throw INVALID_CMD_SYNTAX;
 			}
@@ -548,6 +629,7 @@ void analyse_input(std::string input)
 		case CMD_DOESNT_EXIST: std::cout << "Error, command doesnt exist!\n"; break;
 		case NO_SUCH_FILE: std::cout << "No such file or directory\n"; break;
 		case UNABLE_TO_GET_FT: std::cout << "Unable to get file time from file, please try again\n"; break;
+		case UNABLE_TO_SET_FT: std::cout << "Unable to set file time from file, please try again\n"; break;
 		}
 	}
 }
