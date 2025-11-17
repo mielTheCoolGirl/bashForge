@@ -4,6 +4,7 @@
 #define CMD_DOESNT_EXIST 0
 #include "FileData.h"
 #include <fstream>
+#include <regex>
 
 std::vector<std::string> getCmdSyntax(const std::string& input)
 {
@@ -261,8 +262,19 @@ void cat(std::string flag, std::string file)
 	{
 		numberLines = false; //since the -b flag always overrides the -n flag
 	}
+	bool lastOneBlank=false;
 	while (std::getline(fileToCat, currLine))
 	{
+		if (showTabsAsI)
+		{
+			size_t posOfTab = currLine.find('\t');
+			if (posOfTab != std::string::npos)
+			{
+				std::regex tabs("\t");
+				currLine = std::regex_replace(currLine,tabs,"^I");
+
+			}
+		}
 		if (showLineEndings)
 		{
 			currLine += "$";
@@ -270,24 +282,45 @@ void cat(std::string flag, std::string file)
 		
 		if (numberLines)
 		{
-			std::cout << counter << " " << currLine << std::endl;
-			counter++;
+			if (!(sqeezeLines && lastOneBlank &&(currLine=="$" && showLineEndings)||(currLine=="")))
+			{
+
+				std::cout << counter << " " << currLine << std::endl;
+				counter++;
+
+			}
 		}
 		else if (numberNonBlanks)
 		{
-			if(showLineEndings && currLine == "$")
-				std::cout << currLine << std::endl;
+
+			if (showLineEndings && currLine == "$")
+			{
+				if (!(sqeezeLines && lastOneBlank))
+				{
+					std::cout << currLine << std::endl;
+				}
+				lastOneBlank=true;
+			}
+				
 			else if (currLine != "")
 			{
 				std::cout << counter << " " << currLine << std::endl;
 				counter++;
 			}
-			else
-				std::cout<< currLine << std::endl;
+		
+		}
+		
+		else
+		{
+			
+			if (!(sqeezeLines && currLine == ""&&lastOneBlank))
+			{
+				std::cout << currLine << std::endl;
+			}
+			if (currLine == "")
+				lastOneBlank = true;
 		}
 			
-		else
-			std::cout << currLine << std::endl;
 		
 	}
 }
@@ -388,6 +421,10 @@ void analyse_input(std::string input)
 			else
 				throw INVALID_CMD_SYNTAX;
 				
+		}
+		else if (cmdRes[0] == "exit")
+		{
+			return;
 		}
 		else
 			throw(CMD_DOESNT_EXIST);
