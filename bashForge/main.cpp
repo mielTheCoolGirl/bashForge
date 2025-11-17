@@ -4,7 +4,7 @@
 #define CMD_DOESNT_EXIST 0
 #include "FileData.h"
 #include <fstream>
-#include <regex>
+
 
 std::vector<std::string> getCmdSyntax(const std::string& input)
 {
@@ -150,6 +150,7 @@ bool compareByTime(const std::filesystem::directory_entry& first, const std::fil
 {
 	return std::filesystem::last_write_time(first) > std::filesystem::last_write_time(last);
 }
+
 void ls(std::string flag,std::string path) //path is optional, only for recursion
 {
 	if(path.length() == 0)
@@ -232,7 +233,7 @@ void ls(std::string flag,std::string path) //path is optional, only for recursio
 void cat(std::string flag, std::string file)
 {
 	//numbering lines includes empty lines
-	bool numberLines=false,numberNonBlanks=false, sqeezeLines=false,showLineEndings=false,showTabsAsI=false,showAllSpecials;
+	bool numberLines = false, showNonPrintables = false, numberNonBlanks = false, sqeezeLines = false, showLineEndings = false, showTabsAsI = false, showAllSpecials;
 	std::ifstream fileToCat(file);
 	if (!fileToCat.is_open())
 	{
@@ -249,6 +250,7 @@ void cat(std::string flag, std::string file)
 			case 'T': showTabsAsI = true; break;
 			case 'A': showTabsAsI = true, showLineEndings = true; break;
 			case 'n': numberLines = true; break;
+			case 'v': showNonPrintables = true; break;
 			default:
 			{
 				std::cout << "Error in flag naming, please check for typos\n";
@@ -265,14 +267,38 @@ void cat(std::string flag, std::string file)
 	bool lastOneBlank=false;
 	while (std::getline(fileToCat, currLine))
 	{
+		if (showNonPrintables)
+		{
+			std::string resLine="";
+			for (char c : currLine)
+			{
+				if ((int(c) >= 0 && int(c) <= 31) || int(c) == 127)
+				{
+					if (c == 127)
+						resLine += "^?";
+					else
+					{
+						c = char(int(c + 0x40));
+						resLine += std::string("^") + c;
+					}
+					
+				}
+				else
+				{
+					resLine += c;
+				}
+					
+			}
+			currLine = resLine;
+		}
+		
 		if (showTabsAsI)
 		{
-			size_t posOfTab = currLine.find('\t');
-			if (posOfTab != std::string::npos)
+			size_t posOfTab = 0;
+			while (posOfTab = currLine.find("\t", posOfTab) != std::string::npos)
 			{
-				std::regex tabs("\t");
-				currLine = std::regex_replace(currLine,tabs,"^I");
-
+				currLine.replace(posOfTab, 1, "^I");
+				posOfTab += 2;
 			}
 		}
 		if (showLineEndings)
