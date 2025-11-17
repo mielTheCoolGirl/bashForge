@@ -4,6 +4,7 @@
 #define CMD_DOESNT_EXIST 0
 #define NO_SUCH_FILE -2
 #define UNABLE_TO_GET_FT -3
+#define UNABLE_TO_SET_FT -4
 #include "FileData.h"
 #include <fstream>
 
@@ -39,11 +40,11 @@ std::vector<std::string> getCmdSyntax(const std::string& input)
 		else
 			break;
 		i++;
-		
+
 	}
 	if (!combinedFlag.empty())
 		combinedFlag = "-" + combinedFlag;
-	if(combinedFlag!="")
+	if (combinedFlag != "")
 		finalCmd.push_back(combinedFlag);
 
 	// add all remaining arguments
@@ -56,40 +57,68 @@ std::vector<std::string> getCmdSyntax(const std::string& input)
 	return finalCmd;
 }
 
-void touch(std::string flag, std::string fileToCreate,std::string fileWithNewTS)
+void touch(std::string flag, std::string fileToCreate, std::string fileWithNewTS)
 {
-	bool changeAccessTime=false,changeModTime=false,dontCreateNonExistsing=false,useDate=false,useTime=false,useFilesTS=false,affectSymLinks=false;
+	bool changeAccessTime = false, changeModTime = false, dontCreateNonExisting = false, useDate = false, useTime = false, useFilesTS = false, affectSymLinks = false;
+
 	LPCSTR lpstr = fileToCreate.c_str();
 	for (char part : flag)
 	{
 		if (part == '-') continue;
 		switch (part)
 		{
-			case 'a': changeAccessTime = true; break;
-			case 'm': changeModTime = true; break;
-			case 'c': dontCreateNonExistsing = true; break;
-			case 'd': useDate = true; break;
-			case 't': useTime = true; break;
-			case 'r': useFilesTS = true; break;
-			case 'h': affectSymLinks = true; break;
-			default:
-			{
-				std::cout << "Error in flag naming, please check for typos\n";
-				return;
-			}
+		case 'a': changeAccessTime = true; break;
+		case 'm': changeModTime = true; break;
+		case 'c': dontCreateNonExisting = true; break;
+		case 'd': useDate = true; break;
+		case 't': useTime = true; break;
+		case 'r': useFilesTS = true; break;
+		case 'h': affectSymLinks = true; break;
+		default:
+		{
+			std::cout << "Error in flag naming, please check for typos\n";
+			return;
+		}
 		}
 	}
-	if (changeAccessTime ||changeModTime)
+	HANDLE hFile = INVALID_HANDLE_VALUE;//set the default to be invalid
+
+
+	if (changeAccessTime || changeModTime)
 	{
-		HANDLE hFile = CreateFileA(lpstr,
-			FILE_WRITE_ATTRIBUTES | GENERIC_READ,//these perms are for reading the file and being able to change mod time
-			FILE_SHARE_READ | FILE_SHARE_WRITE,
-			NULL,
-			OPEN_EXISTING,
-			FILE_ATTRIBUTE_NORMAL,
-			NULL);
+
+		if (!dontCreateNonExisting)
+		{
+			hFile = CreateFileA(lpstr,
+				FILE_WRITE_ATTRIBUTES | GENERIC_READ,//these perms are for reading the file and being able to change mod time
+				FILE_SHARE_READ | FILE_SHARE_WRITE,
+				NULL,
+				OPEN_EXISTING,
+				FILE_ATTRIBUTE_NORMAL,
+				NULL);
+
+		}
+		else
+		{
+			if (GetFileAttributesA(lpstr) != INVALID_FILE_ATTRIBUTES)
+			{
+				hFile = CreateFileA(lpstr,
+					FILE_WRITE_ATTRIBUTES | GENERIC_READ,//these perms are for reading the file and being able to change mod time
+					FILE_SHARE_READ | FILE_SHARE_WRITE,
+					NULL,
+					OPEN_EXISTING,
+					FILE_ATTRIBUTE_NORMAL,
+					NULL);
+			}
+			else
+				return;
+
+		}
 		if (hFile == INVALID_HANDLE_VALUE)
+		{
 			throw NO_SUCH_FILE;
+		}
+
 		FILETIME ftCreate, ftAcess, ftWrite;
 		if (!(GetFileTime(hFile, &ftCreate, &ftAcess, &ftWrite)))
 		{
@@ -99,16 +128,66 @@ void touch(std::string flag, std::string fileToCreate,std::string fileWithNewTS)
 
 		SYSTEMTIME fileSysTime;
 		GetLocalTime(&fileSysTime);
-		//IF CHANGE ACESS TIME
-		ftAcess = fileSysTime;  //TO DO, FIX THIS BUG
-		if (!SetFileTime(hFile,NULL, &ftAcess,&ftWrite))
+		if (changeAccessTime)
 		{
-			CloseHandle(hFile);
-			//TO DO: MAKE ECEPTION FOR GETTING TIME
+			if (!(SystemTimeToFileTime(&fileSysTime, &ftAcess)))
+			{
+				CloseHandle(hFile);
+				throw UNABLE_TO_SET_FT;
+			}
+			if (!SetFileTime(hFile, NULL, &ftAcess, &ftWrite))
+			{
+				CloseHandle(hFile);
+				throw UNABLE_TO_GET_FT;
+			}
 		}
-		//TO DO : DO THE SAME WITH MOD TIME
+		if (changeModTime)
+		{
+			if (!(SystemTimeToFileTime(&fileSysTime, &ftWrite)))
+			{
+				CloseHandle(hFile);
+				throw UNABLE_TO_SET_FT;
+			}
+			if (!SetFileTime(hFile, NULL, &ftAcess, &ftWrite))
+			{
+				CloseHandle(hFile);
+				throw UNABLE_TO_GET_FT;
+			}
+		}
+
+		CloseHandle(hFile);
 	}
-	CreateFileA(lpstr,GENERIC_WRITE,0,NULL,CREATE_ALWAYS,FILE_ATTRIBUTE_NORMAL,NULL);
+	else
+	{
+		if (!dontCreateNonExisting)
+		{
+			hFile = CreateFileA(lpstr, GENERIC_WRITE, 0, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+			if (hFile == INVALID_HANDLE_VALUE)
+			{
+				throw NO_SUCH_FILE;
+			}
+			CloseHandle(hFile);
+		}
+		else
+		{
+			if (GetFileAttributesA(lpstr) != INVALID_FILE_ATTRIBUTES)
+			{
+				hFile = CreateFileA(lpstr,
+					FILE_WRITE_ATTRIBUTES | GENERIC_READ,//these perms are for reading the file and being able to change mod time
+					FILE_SHARE_READ | FILE_SHARE_WRITE,
+					NULL,
+					OPEN_EXISTING,
+					FILE_ATTRIBUTE_NORMAL,
+					NULL);
+				CloseHandle(hFile);
+			}
+			else
+				return;
+
+		}
+
+	}
+
 }
 
 //function shows current directory
@@ -129,7 +208,7 @@ void echo(std::string echoStr, std::string flag)
 	bool newLine = true;
 	for (char part : flag)
 	{
-		if (part == '-') continue; 
+		if (part == '-') continue;
 		switch (part)
 		{
 		case 'E': interpretEscapes = false; break;
@@ -167,16 +246,16 @@ void echo(std::string echoStr, std::string flag)
 
 			else
 			{
-				std::cout << echoStr[i]; 
+				std::cout << echoStr[i];
 			}
 
 		}
-		
+
 		else
 		{
 			std::cout << echoStr[i];
 		}
-		
+
 
 	}
 	if (newLine)
@@ -188,7 +267,7 @@ void echo(std::string echoStr, std::string flag)
 std::string totalAmountInPathKB(std::string path)
 {
 	//in the unix filesys the "total" in a sum of all of its blocks, a block is (size+511)/512
-	int sumOfBlocks = 0,currSize=0;
+	int sumOfBlocks = 0, currSize = 0;
 	int typicalDirBlockSize = 4096;
 	for (const auto& entry : std::filesystem::directory_iterator(path))
 	{
@@ -198,7 +277,7 @@ std::string totalAmountInPathKB(std::string path)
 			currSize = typicalDirBlockSize;
 		sumOfBlocks += (currSize + 511) / 512;
 	}
-		
+
 	return std::to_string(sumOfBlocks);
 }
 
@@ -207,9 +286,9 @@ bool compareByTime(const std::filesystem::directory_entry& first, const std::fil
 	return std::filesystem::last_write_time(first) > std::filesystem::last_write_time(last);
 }
 
-void ls(std::string flag,std::string path) //path is optional, only for recursion
+void ls(std::string flag, std::string path) //path is optional, only for recursion
 {
-	if(path.length() == 0)
+	if (path.length() == 0)
 		path = pwd();
 	if (flag.length() == 0)
 	{
@@ -245,8 +324,8 @@ void ls(std::string flag,std::string path) //path is optional, only for recursio
 			entries.push_back(entry);
 	}
 	if (timeSort)
-		std::sort(entries.begin(), entries.end(),compareByTime);
-	
+		std::sort(entries.begin(), entries.end(), compareByTime);
+
 	if (reverse)
 		std::reverse(entries.begin(), entries.end());
 	if (longListing)
@@ -271,7 +350,7 @@ void ls(std::string flag,std::string path) //path is optional, only for recursio
 
 		}
 	}
-	
+
 	if (recursive)
 	{
 		//call recursively ls until there are no more directories inside the directories
@@ -280,7 +359,7 @@ void ls(std::string flag,std::string path) //path is optional, only for recursio
 			if (entry.is_directory())
 			{
 				std::cout << "\n" << entry.path().filename().string() << ":\n";
-				ls("R",entry.path().string());
+				ls("R", entry.path().string());
 			}
 		}
 	}
@@ -300,18 +379,18 @@ void cat(std::string flag, std::string file)
 		if (part == '-') continue;
 		switch (part)
 		{
-			case 'E': showLineEndings = true; break;
-			case 's': sqeezeLines = true; break;
-			case 'b': numberNonBlanks = true; break;
-			case 'T': showTabsAsI = true; break;
-			case 'A': showTabsAsI = true, showLineEndings = true; break;
-			case 'n': numberLines = true; break;
-			case 'v': showNonPrintables = true; break;
-			default:
-			{
-				std::cout << "Error in flag naming, please check for typos\n";
-				return;
-			}
+		case 'E': showLineEndings = true; break;
+		case 's': sqeezeLines = true; break;
+		case 'b': numberNonBlanks = true; break;
+		case 'T': showTabsAsI = true; break;
+		case 'A': showTabsAsI = true, showLineEndings = true; break;
+		case 'n': numberLines = true; break;
+		case 'v': showNonPrintables = true; break;
+		default:
+		{
+			std::cout << "Error in flag naming, please check for typos\n";
+			return;
+		}
 		}
 	}
 	std::string currLine;
@@ -320,12 +399,12 @@ void cat(std::string flag, std::string file)
 	{
 		numberLines = false; //since the -b flag always overrides the -n flag
 	}
-	bool lastOneBlank=false;
+	bool lastOneBlank = false;
 	while (std::getline(fileToCat, currLine))
 	{
 		if (showNonPrintables)
 		{
-			std::string resLine="";
+			std::string resLine = "";
 			for (char c : currLine)
 			{
 				if ((int(c) >= 0 && int(c) <= 31) || int(c) == 127)
@@ -337,17 +416,17 @@ void cat(std::string flag, std::string file)
 						c = char(int(c + 0x40));
 						resLine += std::string("^") + c;
 					}
-					
+
 				}
 				else
 				{
 					resLine += c;
 				}
-					
+
 			}
 			currLine = resLine;
 		}
-		
+
 		if (showTabsAsI)
 		{
 			size_t posOfTab = 0;
@@ -361,10 +440,10 @@ void cat(std::string flag, std::string file)
 		{
 			currLine += "$";
 		}
-		
+
 		if (numberLines)
 		{
-			if (!(sqeezeLines && lastOneBlank &&(currLine=="$" && showLineEndings)||(currLine=="")))
+			if (!(sqeezeLines && lastOneBlank && (currLine == "$" && showLineEndings) || (currLine == "")))
 			{
 
 				std::cout << counter << " " << currLine << std::endl;
@@ -381,29 +460,29 @@ void cat(std::string flag, std::string file)
 				{
 					std::cout << currLine << std::endl;
 				}
-				lastOneBlank=true;
+				lastOneBlank = true;
 			}
-				
+
 			else if (currLine != "")
 			{
 				std::cout << counter << " " << currLine << std::endl;
 				counter++;
 			}
-		
+
 		}
-		
+
 		else
 		{
-			
-			if (!(sqeezeLines && currLine == ""&&lastOneBlank))
+
+			if (!(sqeezeLines && currLine == "" && lastOneBlank))
 			{
 				std::cout << currLine << std::endl;
 			}
 			if (currLine == "")
 				lastOneBlank = true;
 		}
-			
-		
+
+
 	}
 }
 
@@ -430,7 +509,7 @@ void analyse_input(std::string input)
 	}
 	else
 		flag = "";
-	
+
 	try
 	{
 		if (cmdRes[0] == "pwd")
@@ -442,10 +521,10 @@ void analyse_input(std::string input)
 
 		else if (cmdRes[0] == "ls")
 		{
-			if (cmdRes.size() > 1 &&flag!=""&& cmdRes[1][0] != '-')
+			if (cmdRes.size() > 1 && flag != "" && cmdRes[1][0] != '-')
 				throw NO_DASH_FOUND;
-				
-			ls(flag,"");
+
+			ls(flag, "");
 
 		}
 
@@ -460,17 +539,17 @@ void analyse_input(std::string input)
 		{
 			if (cmdRes.size() > 1)
 				throw INVALID_CMD_SYNTAX;
-			std::string moveCursorBack = "\033[H",clearScreen="\033[2J",clearScrollBack="\033[3J";
-			std::cout << moveCursorBack+clearScreen+clearScrollBack<<std::flush;
+			std::string moveCursorBack = "\033[H", clearScreen = "\033[2J", clearScrollBack = "\033[3J";
+			std::cout << moveCursorBack + clearScreen + clearScrollBack << std::flush;
 		}
-			
+
 		else if (cmdRes[0] == "echo")
 		{
 			std::string inputed;
-			size_t startIdx=(flag.empty()?1:2);
-			if(startIdx >= cmdRes.size())
+			size_t startIdx = (flag.empty() ? 1 : 2);
+			if (startIdx >= cmdRes.size())
 			{
-				inputed = ""; 
+				inputed = "";
 			}
 			else
 			{
@@ -481,8 +560,8 @@ void analyse_input(std::string input)
 						inputed += " "; // preserve spaces
 				}
 			}
-			
-			echo(inputed,flag);
+
+			echo(inputed, flag);
 		}
 		else if (cmdRes[0] == "cat")
 		{
@@ -502,7 +581,7 @@ void analyse_input(std::string input)
 			}
 			else
 				throw INVALID_CMD_SYNTAX;
-				
+
 		}
 		else if (cmdRes[0] == "touch")
 		{
@@ -520,16 +599,18 @@ void analyse_input(std::string input)
 				if (flag == "")
 					throw NO_DASH_FOUND;
 				touch(flag, cmdRes[2], "");
+				break;
 			}
 			case 4:
 			{
 				if (flag == "")
 					throw NO_DASH_FOUND;
 				touch(flag, cmdRes[2], cmdRes[3]);
+				break;
 			}
 			default:throw INVALID_CMD_SYNTAX;
 			}
-			
+
 		}
 		else if (cmdRes[0] == "exit")
 		{
@@ -548,6 +629,7 @@ void analyse_input(std::string input)
 		case CMD_DOESNT_EXIST: std::cout << "Error, command doesnt exist!\n"; break;
 		case NO_SUCH_FILE: std::cout << "No such file or directory\n"; break;
 		case UNABLE_TO_GET_FT: std::cout << "Unable to get file time from file, please try again\n"; break;
+		case UNABLE_TO_SET_FT: std::cout << "Unable to set file time from file, please try again\n"; break;
 		}
 	}
 }
@@ -559,7 +641,7 @@ int main()
 	while (input != "exit")
 	{
 		std::cout << "> ";
-		std::getline(std::cin,input);
+		std::getline(std::cin, input);
 		analyse_input(input);
 	}
 	return 0;
