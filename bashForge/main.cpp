@@ -3,6 +3,7 @@
 #define NO_DASH_FOUND -1
 #define CMD_DOESNT_EXIST 0
 #include "FileData.h"
+#include <fstream>
 
 std::vector<std::string> getCmdSyntax(const std::string& input)
 {
@@ -39,8 +40,8 @@ std::vector<std::string> getCmdSyntax(const std::string& input)
 	}
 	if (!combinedFlag.empty())
 		combinedFlag = "-" + combinedFlag;
-
-	finalCmd.push_back(combinedFlag);
+	if(combinedFlag!="")
+		finalCmd.push_back(combinedFlag);
 
 	// add all remaining arguments
 	while (i < cmd.size())
@@ -227,6 +228,45 @@ void ls(std::string flag,std::string path) //path is optional, only for recursio
 	}
 }
 
+void cat(std::string flag, std::string file)
+{
+	//numbering lines includes empty lines
+	bool numberLines=false,numberNonBlanks=false, sqeezeLines=false,showLineEndings=false,showTabsAsI=false,showAllSpecials;
+	std::ifstream fileToCat(file);
+	if (!fileToCat.is_open())
+	{
+		std::cout << " No such file or directory\n";
+	}
+	for (char part : flag)
+	{
+		if (part == '-') continue;
+		switch (part)
+		{
+			case 'E': showLineEndings = true; break;
+			case 's': sqeezeLines = true; break;
+			case 'b': numberNonBlanks = true; break;
+			case 'T': showTabsAsI = true; break;
+			case 'A': showTabsAsI = true, showLineEndings = true; break;
+			case 'n': numberLines = true; break;
+			default:
+			{
+				std::cout << "Error in flag naming, please check for typos\n";
+				return;
+			}
+		}
+	}
+	std::string currLine;
+	int counter = 1;
+	while (std::getline(fileToCat, currLine))
+	{
+		if(numberLines)
+			std::cout << counter<<" " << currLine << std::endl;
+		else
+			std::cout << currLine << std::endl;
+		counter++;
+	}
+}
+
 void whoami()
 {
 	const char* user = std::getenv("USERNAME");
@@ -241,8 +281,13 @@ void analyse_input(std::string input)
 {
 	std::vector<std::string> cmdRes = getCmdSyntax(input);
 	std::string flag;
-	if (cmdRes[1][0] == '-')
-		flag = cmdRes[1];
+	if (cmdRes.size() > 1)
+	{
+		if (cmdRes[1][0] == '-')
+			flag = cmdRes[1];
+		else
+			flag = "";
+	}
 	else
 		flag = "";
 	
@@ -257,7 +302,7 @@ void analyse_input(std::string input)
 
 		else if (cmdRes[0] == "ls")
 		{
-			if (cmdRes.size() > 1 && cmdRes[1][0] != '-')
+			if (cmdRes.size() > 1 &&flag!=""&& cmdRes[1][0] != '-')
 				throw NO_DASH_FOUND;
 				
 			ls(flag,"");
@@ -296,11 +341,12 @@ void analyse_input(std::string input)
 						inputed += " "; // preserve spaces
 				}
 			}
-			if (cmdRes.size() > 1 && cmdRes[1][0] != '-')
-				throw NO_DASH_FOUND;
-			
 			
 			echo(inputed,flag);
+		}
+		else if (cmdRes[0] == "cat")
+		{
+			cat(flag, cmdRes[2]);
 		}
 		else
 			throw(CMD_DOESNT_EXIST);
@@ -310,9 +356,9 @@ void analyse_input(std::string input)
 	{
 		switch (errCode)
 		{
-		case -1: std::cout << "No - found for command, retype your command\n"; break;
-		case 5:std::cout << "Invalid command synthax\n"; break;
-
+		case NO_DASH_FOUND: std::cout << "No - found for command, retype your command\n"; break;
+		case INVALID_CMD_SYNTAX: std::cout << "Invalid command synthax\n"; break;
+		case CMD_DOESNT_EXIST: std::cout << "Error, command doesnt exist!\n"; break;
 		}
 	}
 }
