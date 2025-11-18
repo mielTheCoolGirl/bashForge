@@ -83,7 +83,41 @@ void touch(std::string flag, std::string fileToCreate, std::string fileWithNewTS
 	}
 	HANDLE hFile = INVALID_HANDLE_VALUE;//set the default to be invalid
 
+	if (useFilesTS)
+	{
+		LPCSTR srcFile = fileWithNewTS.c_str();  
+		LPCSTR targetFile = fileToCreate.c_str(); 
+		HANDLE hSource = CreateFileA(srcFile,GENERIC_READ,FILE_SHARE_READ,NULL,OPEN_EXISTING,FILE_ATTRIBUTE_NORMAL,NULL)	;
+		if (hSource == INVALID_HANDLE_VALUE)
+			throw NO_SUCH_FILE;
+		
+		
+		FILETIME ftCreation, ftAccess, ftWrite;
+		SYSTEMTIME stCreation, stLastAccess, stLastWrite;
+		if (!GetFileTime(hSource, &ftCreation, &ftAccess, &ftWrite))
+		{
+			CloseHandle(hSource);
+			throw UNABLE_TO_GET_FT;
+		}
+		CloseHandle(hSource);
+		HANDLE hTarget = CreateFileA(targetFile,
+			FILE_WRITE_ATTRIBUTES,
+			FILE_SHARE_READ | FILE_SHARE_WRITE,
+			NULL,
+			OPEN_EXISTING,
+			FILE_ATTRIBUTE_NORMAL,
+			NULL);
+		if (hTarget == INVALID_HANDLE_VALUE)
+			throw NO_SUCH_FILE;
+		if (!SetFileTime(hTarget, &ftCreation, &ftAccess, &ftWrite))
+		{
+			CloseHandle(hTarget);
+			throw UNABLE_TO_SET_FT;
+		}
 
+		CloseHandle(hTarget);
+		return;
+	}
 	if (changeAccessTime || changeModTime)
 	{
 
