@@ -7,7 +7,7 @@
 #define UNABLE_TO_SET_FT -4
 #include "FileData.h"
 #include <fstream>
-#include <regex>
+
 
 std::vector<std::string> getCmdSyntax(const std::string& input)
 {
@@ -56,47 +56,7 @@ std::vector<std::string> getCmdSyntax(const std::string& input)
 
 	return finalCmd;
 }
-bool checkDateIndays(const std::string& input)
-{
-	std::string date = input;
-	static const std::vector<std::string> weekdays = { "monday","tuesday","wednesday","thursday", "friday","saturday","sunday" };
-	static const std::vector<std::string> simple_phrases = {"today", "tomorrow", "yesterday","last week", "next week"};
-	
-	for (const auto& w : simple_phrases) //check for the simplest options available
-	{
-		if (date == w) return true;
-	}
-	for (const auto& d : weekdays)  //check for date setting
-	{
-		if (date == "next " + d) return true;
-		if (date == "last " + d) return true;
-	}
-	static std::regex in_days(R"(in\s+([0-9]+)\s+days?)");
-	static std::regex days_ago(R"(([0-9]+)\s+days?\s+ago)");
-	std::smatch regex_match;
 
-	if (std::regex_match(date, regex_match, in_days)) 
-	{
-		int n = std::stoi(regex_match[1]);
-		return n >= 1 && n <= 365;  // reasonable day range
-	}
-
-	if (std::regex_match(date, regex_match, days_ago)) 
-	{
-		int n = std::stoi(regex_match[1]);
-		return n >= 1 && n <= 365;
-	}
-
-	//if its doesnt fit any setting
-	return false;
-}
-void checkTimeStamp(const std::string& input)
-{
-	// A date regex which makes you follow the pattern of YYYY-MM-DD
-	std::regex date_regex("^(19|20)\\d{2}\\-(0[1-9]|1[0-2])\\-(0[1-9]|[12][0-9]|3[01])$"); 
-	if (std::regex_match(input, date_regex) == false)
-		throw INVALID_CMD_SYNTAX;
-}
 void touch(const std::string& flag, const std::string& fileToCreate, const std::string& fileWithNewTS)
 {
 	bool changeAccessTime = false, changeModTime = false, dontCreateNonExisting = false, useDate = false, useTime = false, useFilesTS = false, affectSymLinks = false;
