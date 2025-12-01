@@ -7,7 +7,7 @@
 #define UNABLE_TO_SET_FT -4
 #include "FileData.h"
 #include <fstream>
-
+#include <regex>
 
 std::vector<std::string> getCmdSyntax(const std::string& input)
 {
@@ -56,8 +56,48 @@ std::vector<std::string> getCmdSyntax(const std::string& input)
 
 	return finalCmd;
 }
+bool checkDateIndays(const std::string& input)
+{
+	std::string date = input;
+	static const std::vector<std::string> weekdays = { "monday","tuesday","wednesday","thursday", "friday","saturday","sunday" };
+	static const std::vector<std::string> simple_phrases = {"today", "tomorrow", "yesterday","last week", "next week"};
+	
+	for (const auto& w : simple_phrases) //check for the simplest options available
+	{
+		if (date == w) return true;
+	}
+	for (const auto& d : weekdays)  //check for date setting
+	{
+		if (date == "next " + d) return true;
+		if (date == "last " + d) return true;
+	}
+	static std::regex in_days(R"(in\s+([0-9]+)\s+days?)");
+	static std::regex days_ago(R"(([0-9]+)\s+days?\s+ago)");
+	std::smatch regex_match;
 
-void touch(std::string flag, std::string fileToCreate, std::string fileWithNewTS)
+	if (std::regex_match(date, regex_match, in_days)) 
+	{
+		int n = std::stoi(regex_match[1]);
+		return n >= 1 && n <= 365;  // reasonable day range
+	}
+
+	if (std::regex_match(date, regex_match, days_ago)) 
+	{
+		int n = std::stoi(regex_match[1]);
+		return n >= 1 && n <= 365;
+	}
+
+	//if its doesnt fit any setting
+	return false;
+}
+void checkTimeStamp(const std::string& input)
+{
+	// A date regex which makes you follow the pattern of YYYY-MM-DD
+	std::regex date_regex("^(19|20)\\d{2}\\-(0[1-9]|1[0-2])\\-(0[1-9]|[12][0-9]|3[01])$"); 
+	if (std::regex_match(input, date_regex) == false)
+		throw INVALID_CMD_SYNTAX;
+}
+void touch(const std::string& flag, const std::string& fileToCreate, const std::string& fileWithNewTS)
 {
 	bool changeAccessTime = false, changeModTime = false, dontCreateNonExisting = false, useDate = false, useTime = false, useFilesTS = false, affectSymLinks = false;
 
@@ -236,7 +276,7 @@ std::string pwd()
 	return "";
 }
 
-void echo(std::string echoStr, std::string flag)
+void echo(const std::string& echoStr, const std::string& flag)
 {
 	bool interpretEscapes = true;
 	bool newLine = true;
@@ -298,7 +338,7 @@ void echo(std::string echoStr, std::string flag)
 
 }
 
-std::string totalAmountInPathKB(std::string path)
+std::string totalAmountInPathKB(const std::string& path)
 {
 	//in the unix filesys the "total" in a sum of all of its blocks, a block is (size+511)/512
 	int sumOfBlocks = 0, currSize = 0;
@@ -320,7 +360,7 @@ bool compareByTime(const std::filesystem::directory_entry& first, const std::fil
 	return std::filesystem::last_write_time(first) > std::filesystem::last_write_time(last);
 }
 
-void ls(std::string flag, std::string path) //path is optional, only for recursion
+void ls(const std::string& flag, std::string path) //path is optional, only for recursion
 {
 	if (path.length() == 0)
 		path = pwd();
@@ -399,7 +439,7 @@ void ls(std::string flag, std::string path) //path is optional, only for recursi
 	}
 }
 
-void cat(std::string flag, std::string file)
+void cat(const std::string& flag, const std::string& file)
 {
 	//numbering lines includes empty lines
 	bool numberLines = false, showNonPrintables = false, numberNonBlanks = false, sqeezeLines = false, showLineEndings = false, showTabsAsI = false, showAllSpecials;
@@ -530,7 +570,7 @@ void whoami()
 }
 
 
-void analyse_input(std::string input)
+void analyse_input(const std::string& input)
 {
 	std::vector<std::string> cmdRes = getCmdSyntax(input);
 	std::string flag;
