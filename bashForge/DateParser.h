@@ -3,8 +3,11 @@
 #include <iomanip> 
 #include <regex>
 #include <sstream>
-#include <minwinbase.h>
+#include <windows.h>
 #include <string.h>
+
+// num of 100 nanosecsintervals in one day(24*60sec*60min* 10,000,000)
+#define DAY_IN_100NS_UNITS (864000000000LL)
 class DateParser
 {
 public:
