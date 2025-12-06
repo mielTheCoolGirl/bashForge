@@ -248,32 +248,38 @@ void touch(const std::string& flag, const std::string& fileToCreate, const std::
 	}
 	else
 	{
-		if (!dontCreateNonExisting)
-		{
-			hFile = CreateFileA(lpstr, GENERIC_WRITE, 0, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
-			if (hFile == INVALID_HANDLE_VALUE)
-			{
-				throw NO_SUCH_FILE;
-			}
-			CloseHandle(hFile);
-		}
-		else
-		{
-			if (GetFileAttributesA(lpstr) != INVALID_FILE_ATTRIBUTES)
-			{
-				hFile = CreateFileA(lpstr,
-					FILE_WRITE_ATTRIBUTES | GENERIC_READ,//these perms are for reading the file and being able to change mod time
-					FILE_SHARE_READ | FILE_SHARE_WRITE,
-					NULL,
-					OPEN_EXISTING,
-					FILE_ATTRIBUTE_NORMAL,
-					NULL);
-				CloseHandle(hFile);
-			}
-			else
-				return;
+		bool fileExists = (GetFileAttributesA(lpstr) != INVALID_FILE_ATTRIBUTES);
 
+		if (!fileExists && dontCreateNonExisting)
+			return;
+
+
+		hFile = CreateFileA(lpstr,
+			FILE_WRITE_ATTRIBUTES | GENERIC_READ,//these perms are for reading the file and being able to change mod time
+			FILE_SHARE_READ | FILE_SHARE_WRITE,
+			NULL,
+			fileExists ? OPEN_EXISTING : OPEN_ALWAYS,
+			FILE_ATTRIBUTE_NORMAL,
+			NULL);
+		if(hFile == INVALID_HANDLE_VALUE)
+			throw NO_SUCH_FILE;
+
+		//updating system time for file!
+		SYSTEMTIME now;
+		FILETIME ft;
+
+		GetLocalTime(&now);
+		SYSTEMTIME utc;
+		TzSpecificLocalTimeToSystemTime(NULL,&now,&utc);
+		SystemTimeToFileTime(&utc, &ft);
+		if (!SetFileTime(hFile, NULL, &ft, &ft))
+		{
+			CloseHandle(hFile);
+			throw UNABLE_TO_SET_FT;
 		}
+		CloseHandle(hFile);
+
+		
 
 	}
 
