@@ -1,4 +1,4 @@
-# BashForge ![C++](https://img.shields.io/badge/C%2B%2B-17-blue?style=flat&logo=c%2B%2B&logoColor=white) ![Windows](https://img.shields.io/badge/Windows-Native-blue?style=flat&logo=windows&logoColor=white)
+# BashForge ![C++](https://img.shields.io/badge/C%2B%2B-17-blue?style=flat&logo=c%2B%2B&logoColor=white) ![Windows](https://img.shields.io/badge/Windows-Native-blue?style=flat&logo=windows&logoColor=pink)
 
 **BashForge** is a robust, lightweight command-line utility that brings Unix-like command syntax and functionality to Windows using native WinAPI calls.
 
@@ -58,7 +58,7 @@ Piping (|) - Redirection (>, >>, <) - Aliases - History
 
 
 
-## 🚀 Quick Start
+## 🚀 How to Start this on YOUR machine
 
 Clone & build
 
