@@ -6,14 +6,14 @@ DateParser::DateParser(std::string date)
 	if (parse_absolute_date(date))
 		calculate_absolute_time(date);
 	else if (parse_relative_date(date))
-		calculate_relative_time(date); //TO DO, MAKE THIS HAPPEN
+		calculate_relative_time(date); 
 	
 }
 
 bool DateParser::parse_absolute_date(const std::string& input)
 {
-	// A date regex which makes you follow the pattern of YYYY-MM-DD
-	std::regex date_regex("^(19|20)\\d{2}\\-(0[1-9]|1[0-2])\\-(0[1-9]|[12][0-9]|3[01])$");
+	// A date regex which makes you follow the pattern of YYYY-MM-DD or YYYY-MM-DD HH:MM
+	std::regex date_regex(R"(^(19|20)\d{2}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])( ([01][0-9]|2[0-9]):([0-5][0-9]))?$)");
 	return std::regex_match(input, date_regex);
 }
 
@@ -54,10 +54,12 @@ bool DateParser::parse_relative_date(const std::string& input)
 
 void DateParser::calculate_relative_time(const std::string& time)
 {
-	SYSTEMTIME current_time;
-	GetLocalTime(&current_time);
-	FILETIME ft = { 0 };
-	ULONGLONG time_value=(((ULONGLONG)ft.dwHighDateTime) << 32) + ft.dwLowDateTime;
+	SYSTEMTIME current_sys_time;
+	GetLocalTime(&current_sys_time);
+
+	FILETIME current_ft;
+	SystemTimeToFileTime(&current_sys_time, &current_ft);
+	ULONGLONG time_value = ((ULONGLONG)current_ft.dwHighDateTime << 32) | current_ft.dwLowDateTime;
 	long long days_offset = 0;
 
 	if (time == "tomorrow")
@@ -68,60 +70,77 @@ void DateParser::calculate_relative_time(const std::string& time)
 		days_offset = 7;
 	else if (time == "last week")
 		days_offset = -7;
-	
-	
-	static std::regex in_days(R"(in\s+([0-9]+)\s+days?)");
-	static std::regex days_ago(R"(([0-9]+)\s+days?\s+ago)");
-	std::smatch regex_match;
-	if (std::regex_match(time, regex_match, in_days)) {
-		days_offset = std::stoi(regex_match[1]);
-	}
-	else if (std::regex_match(time, regex_match, days_ago)) {
-		days_offset = -std::stoi(regex_match[1]);
-	}
 
-	std::vector<std::string> weekdays = { "monday","tuesday","wednesday","thursday", "friday","saturday","sunday" };
-	int current_dow = current_time.wDayOfWeek;
-	for (int i = 0; i < weekdays.size(); i++)
+	else
 	{
-		int target_day_of_week; //day of the week -> sun=0, mon=1... sat=6
-		if (i < 6)
-			target_day_of_week = i + 1;
-		else
-			target_day_of_week = 0;
+		static std::regex in_days(R"(in\s+([0-9]+)\s+days?)");
+		static std::regex days_ago(R"(([0-9]+)\s+days?\s+ago)");
+		std::smatch regex_match;
 
-		// check for 'next [weekday]'
-		if (time == "next " + weekdays[i])
-		{
-			//calc days until next target day (1 to 7 days)
-			days_offset = (target_day_of_week - current_dow + 7) % 7;
-			if (days_offset == 0) days_offset = 7; // If today is the target, 'next' means 7 days later
-			break;
+		if (std::regex_match(time, regex_match, in_days)) {
+			days_offset = std::stoi(regex_match[1]);
 		}
-		// check for 'last [weekday]'
-		else if (time == "last " + weekdays[i])
+		else if (std::regex_match(time, regex_match, days_ago)) {
+			days_offset = -std::stoi(regex_match[1]);
+		}
+
+		// --- Phase 3: Next/Last Weekday ---
+		else
 		{
-			//calc days since last target day (-1 to -7 days)
-			days_offset = (target_day_of_week - current_dow - 7) % 7;
-			if (days_offset == 0) days_offset = -7; // If today is the target, 'last' means 7 days prior
-			break;
+			// Use an array that aligns with wDayOfWeek: 0=Sun, 1=Mon, ..., 6=Sat
+			std::string weekdays[] = { "sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday" };
+			int current_dow = current_sys_time.wDayOfWeek; // 0-6
+
+			for (int target_dow = 0; target_dow < 7; target_dow++)
+			{
+				// Check for 'next [weekday]'
+				if (time == "next " + weekdays[target_dow])
+				{
+					// Calculate positive difference (1 to 7 days)
+					days_offset = (target_dow - current_dow + 7) % 7;
+					if (days_offset == 0) days_offset = 7; // 'next' means 7 days later if today is the target
+					break;
+				}
+				// Check for 'last [weekday]'
+				else if (time == "last " + weekdays[target_dow])
+				{
+					// Calculate negative difference (-1 to -7 days)
+					days_offset = (target_dow - current_dow - 7) % 7;
+					if (days_offset == 0) days_offset = -7; // 'last' means 7 days prior if today is the target
+					break;
+				}
+			}
 		}
 	}
-	time_value += days_offset * DAY_IN_100NS_UNITS;
-	ft.dwLowDateTime = (DWORD)time_value;
-	ft.dwHighDateTime = (DWORD)(time_value >> 32); //converting back to filetime
-	FileTimeToSystemTime(&ft, &result_time);
+	if (days_offset != 0 ||
+		time == "tomorrow" || time == "yesterday" || time == "next week" || time == "last week" ||
+		std::regex_match(time, std::regex(R"([0-9]+ (days?|weeks?) (ago|later))")) // simplified regex check for full coverage
+		)
+	{
+		// Apply the calculated day offset
+		time_value += days_offset * DAY_IN_100NS_UNITS;
 
+		FILETIME new_ft;
+		new_ft.dwLowDateTime = (DWORD)time_value;
+		new_ft.dwHighDateTime = (DWORD)(time_value >> 32);
+
+		// Convert the new FILETIME to SYSTEMTIME for result_time
+		FileTimeToSystemTime(&new_ft, &result_time);
+	}
 }
 
 void DateParser::calculate_absolute_time(const std::string& date)
 {
-	int y, m, d;
-	sscanf_s(date.c_str(), "%d-%d-%d", &y, &m, &d);
-	result_time = {};
-	result_time.wYear = y;
-	result_time.wMonth = m;
-	result_time.wDay = d;
+	int y = 0, m = 0, d = 0, hh = 0, mm = 0;
+	if (sscanf_s(date.c_str(), "%d-%d-%d %d:%d", &y, &m, &d, &hh, &mm) >= 3)
+	{
+		result_time = {};
+		result_time.wYear = y;
+		result_time.wMonth = m;
+		result_time.wDay = d;
+		result_time.wHour = hh;
+		result_time.wMinute = mm;
+	}
 }
 
 bool DateParser::is_leap_year(int year) const

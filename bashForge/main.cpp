@@ -6,6 +6,7 @@
 #define UNABLE_TO_GET_FT -3
 #define UNABLE_TO_SET_FT -4
 #include "FileData.h"
+#include "DateParser.h"
 #include <fstream>
 
 
@@ -16,11 +17,32 @@ std::vector<std::string> getCmdSyntax(const std::string& input)
 
 	std::vector<std::string> cmd;
 	std::stringstream stringStream(input);
-	std::string currCmd;
+	std::string currArg;
+	bool inQuotes = false;
 
-	while (getline(stringStream, currCmd, ' '))
-		cmd.push_back(currCmd);
+	for (size_t i = 0; i < input.size(); i++)
+	{
+		char c = input[i];
+		if (c == '"')
+		{
+			inQuotes = !inQuotes;
+			continue;
+		}
 
+		if (c == ' ' && !inQuotes) //check if its the end of the cmd /arg
+		{
+			if (!currArg.empty())
+			{
+				cmd.push_back(currArg);
+				currArg.clear();
+			}
+			continue;
+
+		}
+		currArg += c;
+	}
+	if (!currArg.empty())
+		cmd.push_back(currArg);
 	if (cmd.empty())
 		throw CMD_DOESNT_EXIST;
 
@@ -82,7 +104,40 @@ void touch(const std::string& flag, const std::string& fileToCreate, const std::
 		}
 	}
 	HANDLE hFile = INVALID_HANDLE_VALUE;//set the default to be invalid
+	if (useDate)
+	{
+		
+		DateParser date(fileWithNewTS);
 
+		HANDLE hTarget = CreateFileA(
+			fileToCreate.c_str(),
+			FILE_WRITE_ATTRIBUTES,
+			FILE_SHARE_READ | FILE_SHARE_WRITE,
+			NULL,
+			OPEN_EXISTING,
+			FILE_ATTRIBUTE_NORMAL,
+			NULL
+		);
+
+		if (hTarget == INVALID_HANDLE_VALUE)
+			throw NO_SUCH_FILE;
+
+		FILETIME ft;
+		if (!SystemTimeToFileTime(&(date.result_time), &ft))
+		{
+			CloseHandle(hTarget);
+			throw UNABLE_TO_GET_FT;
+		}
+
+		if (!SetFileTime(hTarget, NULL, &ft, &ft))
+		{
+			CloseHandle(hTarget);
+			throw UNABLE_TO_SET_FT;
+		}
+
+		CloseHandle(hTarget);
+		return;
+	}
 	if (useFilesTS)
 	{
 		LPCSTR srcFile = fileWithNewTS.c_str();  
@@ -532,20 +587,20 @@ void whoami()
 
 void analyse_input(const std::string& input)
 {
-	std::vector<std::string> cmdRes = getCmdSyntax(input);
-	std::string flag;
-	if (cmdRes.size() > 1)
-	{
-		if (cmdRes[1][0] == '-')
-			flag = cmdRes[1];
-		else
-			flag = "";
-	}
-	else
-		flag = "";
-
 	try
 	{
+		std::vector<std::string> cmdRes = getCmdSyntax(input);
+		std::string flag;
+		if (cmdRes.size() > 1)
+		{
+			if (cmdRes[1][0] == '-')
+				flag = cmdRes[1];
+			else
+				flag = "";
+		}
+		else
+			flag = "";
+
 		if (cmdRes[0] == "pwd")
 		{
 			if (cmdRes.size() > 1)
@@ -639,7 +694,11 @@ void analyse_input(const std::string& input)
 			{
 				if (flag == "")
 					throw NO_DASH_FOUND;
-				touch(flag, cmdRes[2], cmdRes[3]);
+
+				std::string dateString = cmdRes[2];
+				std::string fileToModify = cmdRes[3];
+
+				touch(flag, fileToModify, dateString);
 				break;
 			}
 			default:throw INVALID_CMD_SYNTAX;
@@ -654,6 +713,7 @@ void analyse_input(const std::string& input)
 			throw(CMD_DOESNT_EXIST);
 
 	}
+	
 	catch (int errCode)
 	{
 		switch (errCode)
