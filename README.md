@@ -42,7 +42,7 @@ chmod, chown (Windows ACL → POSIX mapping)
 
 **2. Process & System Commands**
 
-ps aux, pid, top, kill (Windows Process APIs)
+ps aux, pidof, top, kill (Windows Process APIs)
 
 
 
