@@ -143,6 +143,41 @@ void DateParser::calculate_absolute_time(const std::string& date)
 	}
 }
 
+SYSTEMTIME DateParser::parse_touch_t(const std::string& t)
+{
+	SYSTEMTIME st = {};
+	int year = 0, month = 0, day = 0, hour = 0, minute = 0, second = 0;
+
+	std::string mainPart = t;
+	if (t.find('.') != std::string::npos) //find if there are seconds in the time
+	{
+		mainPart = t.substr(0, t.find('.'));
+		second = std::stoi(t.substr(t.find('.') + 1));
+	}
+	if (mainPart.length() == 12)
+	{
+		sscanf_s(mainPart.c_str(), "%4d%2d%2d%2d%2d", &year, &month, &day, &hour, &minute); //put CCYYMMDDhhmm in a SYSTEMTIME pattern
+	}
+	else if (mainPart.length() == 10) 
+	{
+		int yy;
+		sscanf_s(mainPart.c_str(), "%2d%2d%2d%2d%2d", &yy, &month, &day, &hour, &minute);
+		year = yy + 2000; //amking an assumption that we're starting from the year 2000
+	}
+	else 
+	{
+		throw std::runtime_error("Invalid -t timestamp format");
+	}
+	st.wYear = year;
+	st.wMonth = month;
+	st.wDay = day;
+	st.wHour = hour;
+	st.wMinute = minute;
+	st.wSecond = second;
+
+	return st;
+}
+
 bool DateParser::is_leap_year(int year) const
 {
 	return (year%4==0 && year % 100 != 0) || (year % 400 == 0);

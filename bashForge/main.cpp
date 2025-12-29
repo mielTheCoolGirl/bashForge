@@ -96,6 +96,7 @@ void touch(const std::string& flag, const std::string& fileToCreate, const std::
 		case 't': useTime = true; break;
 		case 'r': useFilesTS = true; break;
 		case 'h': affectSymLinks = true; break;
+		case 'f': break; //this flag does nothing!
 		default:
 		{
 			std::cout << "Error in flag naming, please check for typos\n";
@@ -103,11 +104,54 @@ void touch(const std::string& flag, const std::string& fileToCreate, const std::
 		}
 		}
 	}
+	DWORD dwFlagsAndAttributes = FILE_ATTRIBUTE_NORMAL | FILE_FLAG_BACKUP_SEMANTICS; //the bk semantics is for handling win dirs
+	if (affectSymLinks)
+		dwFlagsAndAttributes |= FILE_FLAG_OPEN_REPARSE_POINT;
+
+	// Check if file exists to respect the -c flag
+	bool fileExists = (GetFileAttributesA(fileToCreate.c_str()) != INVALID_FILE_ATTRIBUTES);
+	if (!fileExists && dontCreateNonExisting)
+		return;
+	
 	HANDLE hFile = INVALID_HANDLE_VALUE;//set the default to be invalid
-	if (useDate)
+	if (useTime || useDate) //both cant be together
 	{
+		SYSTEMTIME utcTime;
+		FILETIME ft;
+		if (useTime)
+		{
+			SYSTEMTIME newTime;
+			try
+			{
+				newTime = DateParser::parse_touch_t(fileWithNewTS);
+			}
+			catch (std::runtime_error err)
+			{
+				std::cout<< err.what();
+				return;
+			}
+			
+			if (!TzSpecificLocalTimeToSystemTime(nullptr, &newTime, &utcTime))
+			{
+				throw UNABLE_TO_GET_FT;
+			}
+
+		}
+		else 
+		{
+			DateParser date(fileWithNewTS);
+			utcTime = date.result_time;
+		}
 		
-		DateParser date(fileWithNewTS);
+		if (!SystemTimeToFileTime(&utcTime, &ft)) 
+		{
+			throw UNABLE_TO_GET_FT;
+		}
+		
+		bool defaultMode = !changeAccessTime && !changeModTime;
+		//just checking if the access or write flags are there
+		LPFILETIME pAccess = (changeAccessTime || defaultMode) ? &ft : NULL;
+		LPFILETIME pWrite = (changeModTime || defaultMode) ? &ft : NULL;
 
 		HANDLE hTarget = CreateFileA(
 			fileToCreate.c_str(),
@@ -115,21 +159,15 @@ void touch(const std::string& flag, const std::string& fileToCreate, const std::
 			FILE_SHARE_READ | FILE_SHARE_WRITE,
 			NULL,
 			OPEN_EXISTING,
-			FILE_ATTRIBUTE_NORMAL,
+			dwFlagsAndAttributes,
 			NULL
 		);
 
 		if (hTarget == INVALID_HANDLE_VALUE)
 			throw NO_SUCH_FILE;
 
-		FILETIME ft;
-		if (!SystemTimeToFileTime(&(date.result_time), &ft))
-		{
-			CloseHandle(hTarget);
-			throw UNABLE_TO_GET_FT;
-		}
-
-		if (!SetFileTime(hTarget, NULL, &ft, &ft))
+		
+		if (!SetFileTime(hTarget, NULL, pAccess, pWrite)) 
 		{
 			CloseHandle(hTarget);
 			throw UNABLE_TO_SET_FT;
@@ -142,7 +180,7 @@ void touch(const std::string& flag, const std::string& fileToCreate, const std::
 	{
 		LPCSTR srcFile = fileWithNewTS.c_str();  
 		LPCSTR targetFile = fileToCreate.c_str(); 
-		HANDLE hSource = CreateFileA(srcFile,GENERIC_READ,FILE_SHARE_READ,NULL,OPEN_EXISTING,FILE_ATTRIBUTE_NORMAL,NULL)	;
+		HANDLE hSource = CreateFileA(srcFile,GENERIC_READ,FILE_SHARE_READ,NULL,OPEN_EXISTING, dwFlagsAndAttributes,NULL)	;
 		if (hSource == INVALID_HANDLE_VALUE)
 			throw NO_SUCH_FILE;
 		
@@ -160,7 +198,7 @@ void touch(const std::string& flag, const std::string& fileToCreate, const std::
 			FILE_SHARE_READ | FILE_SHARE_WRITE,
 			NULL,
 			OPEN_EXISTING,
-			FILE_ATTRIBUTE_NORMAL,
+			dwFlagsAndAttributes,
 			NULL);
 		if (hTarget == INVALID_HANDLE_VALUE)
 			throw NO_SUCH_FILE;
@@ -176,75 +214,34 @@ void touch(const std::string& flag, const std::string& fileToCreate, const std::
 	if (changeAccessTime || changeModTime)
 	{
 
-		if (!dontCreateNonExisting)
-		{
-			hFile = CreateFileA(lpstr,
-				FILE_WRITE_ATTRIBUTES | GENERIC_READ,//these perms are for reading the file and being able to change mod time
-				FILE_SHARE_READ | FILE_SHARE_WRITE,
-				NULL,
-				OPEN_EXISTING,
-				FILE_ATTRIBUTE_NORMAL,
-				NULL);
+		hFile = CreateFileA(lpstr,
+			FILE_WRITE_ATTRIBUTES,
+			FILE_SHARE_READ | FILE_SHARE_WRITE,
+			NULL,
+			OPEN_EXISTING,
+			dwFlagsAndAttributes,
+			NULL);
 
-		}
-		else
-		{
-			if (GetFileAttributesA(lpstr) != INVALID_FILE_ATTRIBUTES)
-			{
-				hFile = CreateFileA(lpstr,
-					FILE_WRITE_ATTRIBUTES | GENERIC_READ,//these perms are for reading the file and being able to change mod time
-					FILE_SHARE_READ | FILE_SHARE_WRITE,
-					NULL,
-					OPEN_EXISTING,
-					FILE_ATTRIBUTE_NORMAL,
-					NULL);
-			}
-			else
-				return;
-
-		}
 		if (hFile == INVALID_HANDLE_VALUE)
 		{
 			throw NO_SUCH_FILE;
 		}
-
-		FILETIME ftCreate, ftAcess, ftWrite;
-		if (!(GetFileTime(hFile, &ftCreate, &ftAcess, &ftWrite)))
+		
+		SYSTEMTIME sysTime;
+		FILETIME ftNow;
+		GetLocalTime(&sysTime);
+		SystemTimeToFileTime(&sysTime, &ftNow);
+		
+		LPFILETIME pAccess = changeAccessTime ? &ftNow : NULL;
+		LPFILETIME pWrite = changeModTime ? &ftNow : NULL;
+		if (!SetFileTime(hFile, NULL, pAccess, pWrite))
 		{
 			CloseHandle(hFile);
-			throw UNABLE_TO_GET_FT;
-		}
-
-		SYSTEMTIME fileSysTime;
-		GetLocalTime(&fileSysTime);
-		if (changeAccessTime)
-		{
-			if (!(SystemTimeToFileTime(&fileSysTime, &ftAcess)))
-			{
-				CloseHandle(hFile);
-				throw UNABLE_TO_SET_FT;
-			}
-			if (!SetFileTime(hFile, NULL, &ftAcess, &ftWrite))
-			{
-				CloseHandle(hFile);
-				throw UNABLE_TO_GET_FT;
-			}
-		}
-		if (changeModTime)
-		{
-			if (!(SystemTimeToFileTime(&fileSysTime, &ftWrite)))
-			{
-				CloseHandle(hFile);
-				throw UNABLE_TO_SET_FT;
-			}
-			if (!SetFileTime(hFile, NULL, &ftAcess, &ftWrite))
-			{
-				CloseHandle(hFile);
-				throw UNABLE_TO_GET_FT;
-			}
+			throw UNABLE_TO_SET_FT;
 		}
 
 		CloseHandle(hFile);
+		return;
 	}
 	else
 	{
@@ -259,7 +256,7 @@ void touch(const std::string& flag, const std::string& fileToCreate, const std::
 			FILE_SHARE_READ | FILE_SHARE_WRITE,
 			NULL,
 			fileExists ? OPEN_EXISTING : OPEN_ALWAYS,
-			FILE_ATTRIBUTE_NORMAL,
+			dwFlagsAndAttributes,
 			NULL);
 		if(hFile == INVALID_HANDLE_VALUE)
 			throw NO_SUCH_FILE;
@@ -278,9 +275,6 @@ void touch(const std::string& flag, const std::string& fileToCreate, const std::
 			throw UNABLE_TO_SET_FT;
 		}
 		CloseHandle(hFile);
-
-		
-
 	}
 
 }

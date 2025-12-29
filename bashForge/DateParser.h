@@ -13,6 +13,7 @@ class DateParser
 public:
     SYSTEMTIME result_time;
     DateParser(std::string date);
+    static SYSTEMTIME  parse_touch_t(const std::string& t);
 private:
 	
     bool parse_absolute_date(const std::string& input);
