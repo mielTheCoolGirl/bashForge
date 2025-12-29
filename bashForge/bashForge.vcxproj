@@ -129,11 +129,13 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="DateParser.cpp" />
     <ClCompile Include="EnvironmentUsers.cpp" />
     <ClCompile Include="FileData.cpp" />
     <ClCompile Include="main.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="DateParser.h" />
     <ClInclude Include="EnvironmentUsers.h" />
     <ClInclude Include="FileData.h" />
   </ItemGroup>

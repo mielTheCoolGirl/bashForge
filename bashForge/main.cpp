@@ -6,6 +6,7 @@
 #define UNABLE_TO_GET_FT -3
 #define UNABLE_TO_SET_FT -4
 #include "FileData.h"
+#include "DateParser.h"
 #include <fstream>
 
 
@@ -16,11 +17,32 @@ std::vector<std::string> getCmdSyntax(const std::string& input)
 
 	std::vector<std::string> cmd;
 	std::stringstream stringStream(input);
-	std::string currCmd;
+	std::string currArg;
+	bool inQuotes = false;
 
-	while (getline(stringStream, currCmd, ' '))
-		cmd.push_back(currCmd);
+	for (size_t i = 0; i < input.size(); i++)
+	{
+		char c = input[i];
+		if (c == '"')
+		{
+			inQuotes = !inQuotes;
+			continue;
+		}
 
+		if (c == ' ' && !inQuotes) //check if its the end of the cmd /arg
+		{
+			if (!currArg.empty())
+			{
+				cmd.push_back(currArg);
+				currArg.clear();
+			}
+			continue;
+
+		}
+		currArg += c;
+	}
+	if (!currArg.empty())
+		cmd.push_back(currArg);
 	if (cmd.empty())
 		throw CMD_DOESNT_EXIST;
 
@@ -40,11 +62,11 @@ std::vector<std::string> getCmdSyntax(const std::string& input)
 		else
 			break;
 		i++;
-		
+
 	}
 	if (!combinedFlag.empty())
 		combinedFlag = "-" + combinedFlag;
-	if(combinedFlag!="")
+	if (combinedFlag != "")
 		finalCmd.push_back(combinedFlag);
 
 	// add all remaining arguments
@@ -57,9 +79,9 @@ std::vector<std::string> getCmdSyntax(const std::string& input)
 	return finalCmd;
 }
 
-void touch(std::string flag, std::string fileToCreate,std::string fileWithNewTS)
+void touch(const std::string& flag, const std::string& fileToCreate, const std::string& fileWithNewTS)
 {
-	bool changeAccessTime=false,changeModTime=false, dontCreateNonExisting=false,useDate=false,useTime=false,useFilesTS=false,affectSymLinks=false;
+	bool changeAccessTime = false, changeModTime = false, dontCreateNonExisting = false, useDate = false, useTime = false, useFilesTS = false, affectSymLinks = false;
 
 	LPCSTR lpstr = fileToCreate.c_str();
 	for (char part : flag)
@@ -67,127 +89,187 @@ void touch(std::string flag, std::string fileToCreate,std::string fileWithNewTS)
 		if (part == '-') continue;
 		switch (part)
 		{
-			case 'a': changeAccessTime = true; break;
-			case 'm': changeModTime = true; break;
-			case 'c': dontCreateNonExisting = true; break;
-			case 'd': useDate = true; break;
-			case 't': useTime = true; break;
-			case 'r': useFilesTS = true; break;
-			case 'h': affectSymLinks = true; break;
-			default:
-			{
-				std::cout << "Error in flag naming, please check for typos\n";
-				return;
-			}
+		case 'a': changeAccessTime = true; break;
+		case 'm': changeModTime = true; break;
+		case 'c': dontCreateNonExisting = true; break;
+		case 'd': useDate = true; break;
+		case 't': useTime = true; break;
+		case 'r': useFilesTS = true; break;
+		case 'h': affectSymLinks = true; break;
+		case 'f': break; //this flag does nothing!
+		default:
+		{
+			std::cout << "Error in flag naming, please check for typos\n";
+			return;
+		}
 		}
 	}
-	HANDLE hFile= INVALID_HANDLE_VALUE;//set the default to be invalid
-	
+	DWORD dwFlagsAndAttributes = FILE_ATTRIBUTE_NORMAL | FILE_FLAG_BACKUP_SEMANTICS; //the bk semantics is for handling win dirs
+	if (affectSymLinks)
+		dwFlagsAndAttributes |= FILE_FLAG_OPEN_REPARSE_POINT;
 
-	if (changeAccessTime ||changeModTime)
+	// Check if file exists to respect the -c flag
+	bool fileExists = (GetFileAttributesA(fileToCreate.c_str()) != INVALID_FILE_ATTRIBUTES);
+	if (!fileExists && dontCreateNonExisting)
+		return;
+
+	HANDLE hFile = INVALID_HANDLE_VALUE;//set the default to be invalid
+	if (useTime || useDate) //both cant be together
 	{
-		
-		if(!dontCreateNonExisting)
+		SYSTEMTIME utcTime;
+		FILETIME ft;
+		if (useTime)
 		{
-			hFile = CreateFileA(lpstr,
-				FILE_WRITE_ATTRIBUTES | GENERIC_READ,//these perms are for reading the file and being able to change mod time
-				FILE_SHARE_READ | FILE_SHARE_WRITE,
-				NULL,
-				OPEN_EXISTING,
-				FILE_ATTRIBUTE_NORMAL,
-				NULL);
+			SYSTEMTIME newTime;
+			try
+			{
+				newTime = DateParser::parse_touch_t(fileWithNewTS);
+			}
+			catch (std::runtime_error err)
+			{
+				std::cout << err.what();
+				return;
+			}
+
+			if (!TzSpecificLocalTimeToSystemTime(nullptr, &newTime, &utcTime))
+			{
+				throw UNABLE_TO_GET_FT;
+			}
 
 		}
 		else
 		{
-			if (GetFileAttributesA(lpstr) != INVALID_FILE_ATTRIBUTES)
-			{
-				hFile = CreateFileA(lpstr,
-					FILE_WRITE_ATTRIBUTES | GENERIC_READ,//these perms are for reading the file and being able to change mod time
-					FILE_SHARE_READ | FILE_SHARE_WRITE,
-					NULL,
-					OPEN_EXISTING,
-					FILE_ATTRIBUTE_NORMAL,
-					NULL);
-			}
-			else
-				return;
-			
+			DateParser date(fileWithNewTS);
+			utcTime = date.result_time;
 		}
+
+		if (!SystemTimeToFileTime(&utcTime, &ft))
+		{
+			throw UNABLE_TO_GET_FT;
+		}
+
+		bool defaultMode = !changeAccessTime && !changeModTime;
+		//just checking if the access or write flags are there
+		LPFILETIME pAccess = (changeAccessTime || defaultMode) ? &ft : NULL;
+		LPFILETIME pWrite = (changeModTime || defaultMode) ? &ft : NULL;
+
+		HANDLE hTarget = CreateFileA(
+			fileToCreate.c_str(),
+			FILE_WRITE_ATTRIBUTES,
+			FILE_SHARE_READ | FILE_SHARE_WRITE,
+			NULL,
+			OPEN_EXISTING,
+			dwFlagsAndAttributes,
+			NULL
+		);
+
+		if (hTarget == INVALID_HANDLE_VALUE)
+			throw NO_SUCH_FILE;
+
+		if (!SetFileTime(hTarget, NULL, pAccess, pWrite))
+		{
+			CloseHandle(hTarget);
+			throw UNABLE_TO_SET_FT;
+		}
+
+		CloseHandle(hTarget);
+		return;
+	}
+	if (useFilesTS)
+	{
+		LPCSTR srcFile = fileWithNewTS.c_str();
+		LPCSTR targetFile = fileToCreate.c_str();
+		HANDLE hSource = CreateFileA(srcFile, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, dwFlagsAndAttributes, NULL);
+		if (hSource == INVALID_HANDLE_VALUE)
+			throw NO_SUCH_FILE;
+
+		FILETIME ftCreation, ftAccess, ftWrite;
+		if (!GetFileTime(hSource, &ftCreation, &ftAccess, &ftWrite))
+		{
+			CloseHandle(hSource);
+			throw UNABLE_TO_GET_FT;
+		}
+		CloseHandle(hSource);
+		HANDLE hTarget = CreateFileA(targetFile,
+			FILE_WRITE_ATTRIBUTES,
+			FILE_SHARE_READ | FILE_SHARE_WRITE,
+			NULL,
+			OPEN_EXISTING,
+			dwFlagsAndAttributes,
+			NULL);
+		if (hTarget == INVALID_HANDLE_VALUE)
+			throw NO_SUCH_FILE;
+		if (!SetFileTime(hTarget, &ftCreation, &ftAccess, &ftWrite))
+		{
+			CloseHandle(hTarget);
+			throw UNABLE_TO_SET_FT;
+		}
+
+		CloseHandle(hTarget);
+		return;
+	}
+	if (changeAccessTime || changeModTime)
+	{
+		hFile = CreateFileA(lpstr,
+			FILE_WRITE_ATTRIBUTES,
+			FILE_SHARE_READ | FILE_SHARE_WRITE,
+			NULL,
+			OPEN_EXISTING,
+			dwFlagsAndAttributes,
+			NULL);
+
 		if (hFile == INVALID_HANDLE_VALUE)
 		{
 			throw NO_SUCH_FILE;
 		}
-			
-		FILETIME ftCreate, ftAcess, ftWrite;
-		if (!(GetFileTime(hFile, &ftCreate, &ftAcess, &ftWrite)))
+
+		SYSTEMTIME sysTime;
+		FILETIME ftNow;
+		GetLocalTime(&sysTime);
+		SystemTimeToFileTime(&sysTime, &ftNow);
+
+		LPFILETIME pAccess = changeAccessTime ? &ftNow : NULL;
+		LPFILETIME pWrite = changeModTime ? &ftNow : NULL;
+		if (!SetFileTime(hFile, NULL, pAccess, pWrite))
 		{
 			CloseHandle(hFile);
-			throw UNABLE_TO_GET_FT;
+			throw UNABLE_TO_SET_FT;
 		}
 
-		SYSTEMTIME fileSysTime;
-		GetLocalTime(&fileSysTime);
-		if (changeAccessTime)
-		{
-			if (!(SystemTimeToFileTime(&fileSysTime, &ftAcess)))
-			{
-				CloseHandle(hFile);
-				throw UNABLE_TO_SET_FT;
-			}
-			if (!SetFileTime(hFile, NULL, &ftAcess, &ftWrite))
-			{
-				CloseHandle(hFile);
-				throw UNABLE_TO_GET_FT;
-			}
-		}
-		if(changeModTime)
-		{
-			if (!(SystemTimeToFileTime(&fileSysTime, &ftWrite)))
-			{
-				CloseHandle(hFile);
-				throw UNABLE_TO_SET_FT;
-			}
-			if (!SetFileTime(hFile, NULL, &ftAcess, &ftWrite))
-			{
-				CloseHandle(hFile);
-				throw UNABLE_TO_GET_FT;
-			}
-		}
-		
 		CloseHandle(hFile);
+		return;
 	}
 	else
 	{
-		if (!dontCreateNonExisting)
-		{
-			hFile = CreateFileA(lpstr, GENERIC_WRITE, 0, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
-			if (hFile == INVALID_HANDLE_VALUE)
-			{
-				throw NO_SUCH_FILE;
-			}
-			CloseHandle(hFile);
-		}
-		else
-		{
-			if (GetFileAttributesA(lpstr) != INVALID_FILE_ATTRIBUTES)
-			{
-				hFile = CreateFileA(lpstr,
-					FILE_WRITE_ATTRIBUTES | GENERIC_READ,//these perms are for reading the file and being able to change mod time
-					FILE_SHARE_READ | FILE_SHARE_WRITE,
-					NULL,
-					OPEN_EXISTING,
-					FILE_ATTRIBUTE_NORMAL,
-					NULL);
-				CloseHandle(hFile);
-			}
-			else
-				return;
+		bool fileExists = (GetFileAttributesA(lpstr) != INVALID_FILE_ATTRIBUTES);
 
+		if (!fileExists && dontCreateNonExisting)
+			return;
+
+		hFile = CreateFileA(lpstr,
+			FILE_WRITE_ATTRIBUTES | GENERIC_READ,
+			FILE_SHARE_READ | FILE_SHARE_WRITE,
+			NULL,
+			fileExists ? OPEN_EXISTING : OPEN_ALWAYS,
+			dwFlagsAndAttributes,
+			NULL);
+		if (hFile == INVALID_HANDLE_VALUE)
+			throw NO_SUCH_FILE;
+
+		SYSTEMTIME now;
+		FILETIME ft;
+
+		GetLocalTime(&now);
+		SYSTEMTIME utc;
+		TzSpecificLocalTimeToSystemTime(NULL, &now, &utc);
+		SystemTimeToFileTime(&utc, &ft);
+		if (!SetFileTime(hFile, NULL, &ft, &ft))
+		{
+			CloseHandle(hFile);
+			throw UNABLE_TO_SET_FT;
 		}
-		
+		CloseHandle(hFile);
 	}
-	
 }
 
 //function shows current directory
@@ -202,13 +284,13 @@ std::string pwd()
 	return "";
 }
 
-void echo(std::string echoStr, std::string flag)
+void echo(const std::string& echoStr, const std::string& flag)
 {
 	bool interpretEscapes = true;
 	bool newLine = true;
 	for (char part : flag)
 	{
-		if (part == '-') continue; 
+		if (part == '-') continue;
 		switch (part)
 		{
 		case 'E': interpretEscapes = false; break;
@@ -246,16 +328,16 @@ void echo(std::string echoStr, std::string flag)
 
 			else
 			{
-				std::cout << echoStr[i]; 
+				std::cout << echoStr[i];
 			}
 
 		}
-		
+
 		else
 		{
 			std::cout << echoStr[i];
 		}
-		
+
 
 	}
 	if (newLine)
@@ -264,10 +346,10 @@ void echo(std::string echoStr, std::string flag)
 
 }
 
-std::string totalAmountInPathKB(std::string path)
+std::string totalAmountInPathKB(const std::string& path)
 {
 	//in the unix filesys the "total" in a sum of all of its blocks, a block is (size+511)/512
-	int sumOfBlocks = 0,currSize=0;
+	int sumOfBlocks = 0, currSize = 0;
 	int typicalDirBlockSize = 4096;
 	for (const auto& entry : std::filesystem::directory_iterator(path))
 	{
@@ -277,7 +359,7 @@ std::string totalAmountInPathKB(std::string path)
 			currSize = typicalDirBlockSize;
 		sumOfBlocks += (currSize + 511) / 512;
 	}
-		
+
 	return std::to_string(sumOfBlocks);
 }
 
@@ -286,9 +368,9 @@ bool compareByTime(const std::filesystem::directory_entry& first, const std::fil
 	return std::filesystem::last_write_time(first) > std::filesystem::last_write_time(last);
 }
 
-void ls(std::string flag,std::string path) //path is optional, only for recursion
+void ls(const std::string& flag, std::string path) //path is optional, only for recursion
 {
-	if(path.length() == 0)
+	if (path.length() == 0)
 		path = pwd();
 	if (flag.length() == 0)
 	{
@@ -324,8 +406,8 @@ void ls(std::string flag,std::string path) //path is optional, only for recursio
 			entries.push_back(entry);
 	}
 	if (timeSort)
-		std::sort(entries.begin(), entries.end(),compareByTime);
-	
+		std::sort(entries.begin(), entries.end(), compareByTime);
+
 	if (reverse)
 		std::reverse(entries.begin(), entries.end());
 	if (longListing)
@@ -350,7 +432,7 @@ void ls(std::string flag,std::string path) //path is optional, only for recursio
 
 		}
 	}
-	
+
 	if (recursive)
 	{
 		//call recursively ls until there are no more directories inside the directories
@@ -359,13 +441,13 @@ void ls(std::string flag,std::string path) //path is optional, only for recursio
 			if (entry.is_directory())
 			{
 				std::cout << "\n" << entry.path().filename().string() << ":\n";
-				ls("R",entry.path().string());
+				ls("R", entry.path().string());
 			}
 		}
 	}
 }
 
-void cat(std::string flag, std::string file)
+void cat(const std::string& flag, const std::string& file)
 {
 	//numbering lines includes empty lines
 	bool numberLines = false, showNonPrintables = false, numberNonBlanks = false, sqeezeLines = false, showLineEndings = false, showTabsAsI = false, showAllSpecials;
@@ -379,18 +461,18 @@ void cat(std::string flag, std::string file)
 		if (part == '-') continue;
 		switch (part)
 		{
-			case 'E': showLineEndings = true; break;
-			case 's': sqeezeLines = true; break;
-			case 'b': numberNonBlanks = true; break;
-			case 'T': showTabsAsI = true; break;
-			case 'A': showTabsAsI = true, showLineEndings = true; break;
-			case 'n': numberLines = true; break;
-			case 'v': showNonPrintables = true; break;
-			default:
-			{
-				std::cout << "Error in flag naming, please check for typos\n";
-				return;
-			}
+		case 'E': showLineEndings = true; break;
+		case 's': sqeezeLines = true; break;
+		case 'b': numberNonBlanks = true; break;
+		case 'T': showTabsAsI = true; break;
+		case 'A': showTabsAsI = true, showLineEndings = true; break;
+		case 'n': numberLines = true; break;
+		case 'v': showNonPrintables = true; break;
+		default:
+		{
+			std::cout << "Error in flag naming, please check for typos\n";
+			return;
+		}
 		}
 	}
 	std::string currLine;
@@ -399,12 +481,12 @@ void cat(std::string flag, std::string file)
 	{
 		numberLines = false; //since the -b flag always overrides the -n flag
 	}
-	bool lastOneBlank=false;
+	bool lastOneBlank = false;
 	while (std::getline(fileToCat, currLine))
 	{
 		if (showNonPrintables)
 		{
-			std::string resLine="";
+			std::string resLine = "";
 			for (char c : currLine)
 			{
 				if ((int(c) >= 0 && int(c) <= 31) || int(c) == 127)
@@ -416,17 +498,17 @@ void cat(std::string flag, std::string file)
 						c = char(int(c + 0x40));
 						resLine += std::string("^") + c;
 					}
-					
+
 				}
 				else
 				{
 					resLine += c;
 				}
-					
+
 			}
 			currLine = resLine;
 		}
-		
+
 		if (showTabsAsI)
 		{
 			size_t posOfTab = 0;
@@ -440,10 +522,10 @@ void cat(std::string flag, std::string file)
 		{
 			currLine += "$";
 		}
-		
+
 		if (numberLines)
 		{
-			if (!(sqeezeLines && lastOneBlank &&(currLine=="$" && showLineEndings)||(currLine=="")))
+			if (!(sqeezeLines && lastOneBlank && (currLine == "$" && showLineEndings) || (currLine == "")))
 			{
 
 				std::cout << counter << " " << currLine << std::endl;
@@ -460,29 +542,29 @@ void cat(std::string flag, std::string file)
 				{
 					std::cout << currLine << std::endl;
 				}
-				lastOneBlank=true;
+				lastOneBlank = true;
 			}
-				
+
 			else if (currLine != "")
 			{
 				std::cout << counter << " " << currLine << std::endl;
 				counter++;
 			}
-		
+
 		}
-		
+
 		else
 		{
-			
-			if (!(sqeezeLines && currLine == ""&&lastOneBlank))
+
+			if (!(sqeezeLines && currLine == "" && lastOneBlank))
 			{
 				std::cout << currLine << std::endl;
 			}
 			if (currLine == "")
 				lastOneBlank = true;
 		}
-			
-		
+
+
 	}
 }
 
@@ -496,22 +578,22 @@ void whoami()
 }
 
 
-void analyse_input(std::string input)
+void analyse_input(const std::string& input)
 {
-	std::vector<std::string> cmdRes = getCmdSyntax(input);
-	std::string flag;
-	if (cmdRes.size() > 1)
-	{
-		if (cmdRes[1][0] == '-')
-			flag = cmdRes[1];
-		else
-			flag = "";
-	}
-	else
-		flag = "";
-	
 	try
 	{
+		std::vector<std::string> cmdRes = getCmdSyntax(input);
+		std::string flag;
+		if (cmdRes.size() > 1)
+		{
+			if (cmdRes[1][0] == '-')
+				flag = cmdRes[1];
+			else
+				flag = "";
+		}
+		else
+			flag = "";
+
 		if (cmdRes[0] == "pwd")
 		{
 			if (cmdRes.size() > 1)
@@ -521,10 +603,10 @@ void analyse_input(std::string input)
 
 		else if (cmdRes[0] == "ls")
 		{
-			if (cmdRes.size() > 1 &&flag!=""&& cmdRes[1][0] != '-')
+			if (cmdRes.size() > 1 && flag != "" && cmdRes[1][0] != '-')
 				throw NO_DASH_FOUND;
-				
-			ls(flag,"");
+
+			ls(flag, "");
 
 		}
 
@@ -539,17 +621,17 @@ void analyse_input(std::string input)
 		{
 			if (cmdRes.size() > 1)
 				throw INVALID_CMD_SYNTAX;
-			std::string moveCursorBack = "\033[H",clearScreen="\033[2J",clearScrollBack="\033[3J";
-			std::cout << moveCursorBack+clearScreen+clearScrollBack<<std::flush;
+			std::string moveCursorBack = "\033[H", clearScreen = "\033[2J", clearScrollBack = "\033[3J";
+			std::cout << moveCursorBack + clearScreen + clearScrollBack << std::flush;
 		}
-			
+
 		else if (cmdRes[0] == "echo")
 		{
 			std::string inputed;
-			size_t startIdx=(flag.empty()?1:2);
-			if(startIdx >= cmdRes.size())
+			size_t startIdx = (flag.empty() ? 1 : 2);
+			if (startIdx >= cmdRes.size())
 			{
-				inputed = ""; 
+				inputed = "";
 			}
 			else
 			{
@@ -560,8 +642,8 @@ void analyse_input(std::string input)
 						inputed += " "; // preserve spaces
 				}
 			}
-			
-			echo(inputed,flag);
+
+			echo(inputed, flag);
 		}
 		else if (cmdRes[0] == "cat")
 		{
@@ -581,7 +663,7 @@ void analyse_input(std::string input)
 			}
 			else
 				throw INVALID_CMD_SYNTAX;
-				
+
 		}
 		else if (cmdRes[0] == "touch")
 		{
@@ -605,12 +687,20 @@ void analyse_input(std::string input)
 			{
 				if (flag == "")
 					throw NO_DASH_FOUND;
+<<<<<<< HEAD
 				touch(flag, cmdRes[2], cmdRes[3]);
+=======
+
+				std::string dateString = cmdRes[2];
+				std::string fileToModify = cmdRes[3];
+
+				touch(flag, fileToModify, dateString);
+>>>>>>> feature/touch-command
 				break;
 			}
 			default:throw INVALID_CMD_SYNTAX;
 			}
-			
+
 		}
 		else if (cmdRes[0] == "exit")
 		{
@@ -620,6 +710,7 @@ void analyse_input(std::string input)
 			throw(CMD_DOESNT_EXIST);
 
 	}
+	
 	catch (int errCode)
 	{
 		switch (errCode)
@@ -641,7 +732,7 @@ int main()
 	while (input != "exit")
 	{
 		std::cout << "> ";
-		std::getline(std::cin,input);
+		std::getline(std::cin, input);
 		analyse_input(input);
 	}
 	return 0;
