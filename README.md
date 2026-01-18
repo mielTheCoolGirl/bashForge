@@ -29,11 +29,10 @@
   - `-s` (squeeze empty lines)
 - **`touch`** - Advanced file creation featuring timestamp manipulation with flags `-a`, `-m`, `-c`, `-r`, `-d`, `-t`, `-h`
 ### In Progress
-
+- **cd** - Directory navigation with planned support for logical/physical paths
 
 ## 🎯 Future Roadmap
-- **cd** - Directory navigation with planned support for logical/physical paths
-  
+
 **1. Advanced Filesystem Commands**
 
 rm, mv, cp, mkdir, rmdir, find
