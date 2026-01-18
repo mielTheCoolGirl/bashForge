@@ -577,6 +577,21 @@ void whoami()
 		std::cout << "Unknown" << "\n";
 }
 
+void goHome()
+{
+	const char* userProfile = getenv("USERPROFILE");
+	std::filesystem::path userPath = userProfile;
+	std::filesystem::current_path(userPath);
+}
+void cd(std::string& directory)
+{
+	if (directory == ".")
+		return;
+	if (directory == "~" || directory == "") //go to home
+	{
+		goHome();
+	}
+}
 
 void analyse_input(const std::string& input)
 {
@@ -687,20 +702,28 @@ void analyse_input(const std::string& input)
 			{
 				if (flag == "")
 					throw NO_DASH_FOUND;
-<<<<<<< HEAD
-				touch(flag, cmdRes[2], cmdRes[3]);
-=======
 
 				std::string dateString = cmdRes[2];
 				std::string fileToModify = cmdRes[3];
 
 				touch(flag, fileToModify, dateString);
->>>>>>> feature/touch-command
+
 				break;
 			}
 			default:throw INVALID_CMD_SYNTAX;
 			}
 
+		}
+		else if (cmdRes[0]=="cd")
+		{
+			std::string dirToReach;
+			if (cmdRes.size() > 2)
+				throw INVALID_CMD_SYNTAX;
+			if (cmdRes.size() == 1)
+				dirToReach = "";
+			else
+				dirToReach = cmdRes[1];
+			cd(dirToReach);
 		}
 		else if (cmdRes[0] == "exit")
 		{
