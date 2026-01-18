@@ -27,19 +27,22 @@ void CommandCd::cd(std::string& directory)
     std::vector<std::string> dirPaths;
     if (directory == ".")
         return;
-
-    if (directory == "~" || directory == "") //go to home
+    dirPaths = parseDir(directory);
+    if (dirPaths[0] == "~" || dirPaths[0] == "") //go to home
     {
         goHome();
     }
-    else
+        
+    for (int i=1;i<dirPaths.size();i++)
     {
-        dirPaths = parseDir(directory);
-        for (std::string path : dirPaths)
+        if (dirPaths[i] == "..")
         {
-
+            std::filesystem::path parent_dir = std::filesystem::current_path() / "..";
+            std::filesystem::current_path(std::filesystem::canonical(parent_dir));
         }
+           
     }
+    
 }
 
 std::vector<std::string> CommandCd::parseDir(std::string& inputPath)
@@ -53,13 +56,19 @@ std::vector<std::string> CommandCd::parseDir(std::string& inputPath)
     std::string currDir = "";
     for (int i = 0; i < inputPath.size(); i++)
     {
-        while (inputPath[i] != '\\')
+        if (inputPath[i] == '/')
         {
-            currDir += inputPath[i];
-            i++;
+            if (!currDir.empty())
+            {
+                directories.push_back(currDir);
+            }
+            currDir = "";
         }
-        directories.push_back(currDir);
-        currDir = "";
+        else
+            currDir += inputPath[i];   
     }
+    if (!currDir.empty())
+        directories.push_back(currDir);
+    
     return directories;
 }
