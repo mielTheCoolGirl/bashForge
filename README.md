@@ -33,6 +33,7 @@
 
 ## 🎯 Future Roadmap
 - **cd** - Directory navigation with planned support for logical/physical paths
+  
 **1. Advanced Filesystem Commands**
 
 rm, mv, cp, mkdir, rmdir, find
