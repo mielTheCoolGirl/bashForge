@@ -27,15 +27,15 @@
   - Non-printables: `-v` (^ notation for control chars)
   - Formatting: `-T` (tabs as ^I), `-E` (endlines as $), `-A` (both)
   - `-s` (squeeze empty lines)
-
+- **`touch`** - Advanced file creation featuring timestamp manipulation with flags `-a`, `-m`, `-c`, `-r`, `-d`, `-t`, `-h`
 ### In Progress
-- **`touch`** - Advanced file timestamp manipulation with flags `-a`, `-m`, `-c`, `-r`, `-d`, `-t`, `-h`
+
 
 ## 🎯 Future Roadmap
-
+- **cd** - Directory navigation with planned support for logical/physical paths
 **1. Advanced Filesystem Commands**
 
-cd, rm, mv, cp, mkdir, rmdir, find
+rm, mv, cp, mkdir, rmdir, find
 chmod, chown (Windows ACL → POSIX mapping)
 
 
