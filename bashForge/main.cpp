@@ -577,10 +577,6 @@ void whoami()
 		std::cout << "Unknown" << "\n";
 }
 
-void cd(std::string& directory)
-{
-
-}
 
 void analyse_input(const std::string& input)
 {
