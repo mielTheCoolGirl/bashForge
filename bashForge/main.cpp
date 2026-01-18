@@ -7,6 +7,7 @@
 #define UNABLE_TO_SET_FT -4
 #include "FileData.h"
 #include "DateParser.h"
+#include "CommandCd.h"
 #include <fstream>
 
 
@@ -577,21 +578,6 @@ void whoami()
 		std::cout << "Unknown" << "\n";
 }
 
-void goHome()
-{
-	const char* userProfile = getenv("USERPROFILE");
-	std::filesystem::path userPath = userProfile;
-	std::filesystem::current_path(userPath);
-}
-void cd(std::string& directory)
-{
-	if (directory == ".")
-		return;
-	if (directory == "~" || directory == "") //go to home
-	{
-		goHome();
-	}
-}
 
 void analyse_input(const std::string& input)
 {
@@ -723,7 +709,8 @@ void analyse_input(const std::string& input)
 				dirToReach = "";
 			else
 				dirToReach = cmdRes[1];
-			cd(dirToReach);
+			CommandCd cd;
+			cd.cd(dirToReach);
 		}
 		else if (cmdRes[0] == "exit")
 		{
