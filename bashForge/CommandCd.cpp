@@ -1,4 +1,5 @@
 #include "CommandCd.h"
+#include <iostream>
 
 
 
@@ -33,6 +34,7 @@ void CommandCd::cd(std::string& directory)
         std::filesystem::current_path(userPath);
         return;
     }
+
     dirPaths = parseDir(directory);
     if (dirPaths[0] == "~" || dirPaths[0] == "") //go to home
     {
@@ -40,14 +42,30 @@ void CommandCd::cd(std::string& directory)
     }
     
         
-    for (int i=1;i<dirPaths.size();i++)
+    for (int i=0;i<dirPaths.size();i++)
     {
         if (dirPaths[i] == "..")
         {
             std::filesystem::path parent_dir = std::filesystem::current_path() / "..";
             std::filesystem::current_path(std::filesystem::canonical(parent_dir));
         }
-           
+        else
+        {
+            if (!isDirReachable(dirPaths[i]))
+            {
+                //throw an "folder doesnt exist" excpetion
+                std::cout << "Error: folder doesn't exist"<<std::endl;
+                return;
+            }
+            else
+            {
+                const size_t size = 1024;
+                char buff[size];
+                _getcwd(buff, size);
+                std::string path = buff + dirPaths[i];
+                std::filesystem::current_path(path);
+            }
+        }
     }
     
 }
