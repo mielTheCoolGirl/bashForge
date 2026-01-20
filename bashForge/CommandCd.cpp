@@ -27,6 +27,12 @@ void CommandCd::cd(std::string& directory)
     std::vector<std::string> dirPaths;
     if (directory == ".")
         return;
+    if (directory == "/")
+    {
+        std::filesystem::path userPath = "C:\\"; //path to the root directory
+        std::filesystem::current_path(userPath);
+        return;
+    }
     dirPaths = parseDir(directory);
     if (dirPaths[0] == "~" || dirPaths[0] == "") //go to home
     {
@@ -51,7 +57,7 @@ std::vector<std::string> CommandCd::parseDir(std::string& inputPath)
     std::vector<std::string> directories;
     if (inputPath == "")
     {
-        directories.push_back("");
+        directories.push_back(inputPath);
         return directories;
     }
         
