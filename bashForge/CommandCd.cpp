@@ -32,6 +32,7 @@ void CommandCd::cd(std::string& directory)
     {
         goHome();
     }
+    
         
     for (int i=1;i<dirPaths.size();i++)
     {
@@ -48,6 +49,12 @@ void CommandCd::cd(std::string& directory)
 std::vector<std::string> CommandCd::parseDir(std::string& inputPath)
 {
     std::vector<std::string> directories;
+    if (inputPath == "")
+    {
+        directories.push_back("");
+        return directories;
+    }
+        
     if (inputPath[0] == '~')//if its beginning from home
     {
         directories.push_back(std::to_string(inputPath[0]));
