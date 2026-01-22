@@ -15,7 +15,8 @@ bool CommandCd::isDirReachable(std::string& path_str)
     const size_t size = 1024;
     char buff[size];
     _getcwd(buff, size);
-    std::string path = buff + path_str;
+    path_str= "\\" + path_str;
+    std::string path = buff;
     std::filesystem::path p(path);
     if (std::filesystem::exists(p))
         return true;
