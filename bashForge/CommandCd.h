@@ -4,6 +4,8 @@
 #include <string>
 #include <filesystem>
 #include <direct.h>
+#include <cstdlib>
+#include <iostream>
 class CommandCd
 {
 	public:

@@ -1,6 +1,4 @@
 #include "CommandCd.h"
-#include <iostream>
-
 
 
 void CommandCd::goHome()
@@ -12,15 +10,8 @@ void CommandCd::goHome()
 
 bool CommandCd::isDirReachable(std::string& path_str)
 {
-    const size_t size = 1024;
-    char buff[size];
-    _getcwd(buff, size);
-    path_str= "\\" + path_str;
-    std::string path = buff+path_str;
-    std::filesystem::path p(path);
-    if (std::filesystem::exists(p))
-        return true;
-    return false;
+    std::filesystem::path p(path_str);
+    return std::filesystem::exists(p) && std::filesystem::is_directory(p);
 }
 
 
@@ -45,26 +36,35 @@ void CommandCd::cd(std::string& directory)
         
     for (int i=0;i<dirPaths.size();i++)
     {
+        if (dirPaths[i] == "~") 
+        {
+            goHome();
+        }
         if (dirPaths[i] == "..")
         {
-            std::filesystem::path parent_dir = std::filesystem::current_path() / "..";
+            std::filesystem::path parent_dir = std::filesystem::current_path().parent_path();
             std::filesystem::current_path(std::filesystem::canonical(parent_dir));
         }
         else
         {
             if (!isDirReachable(dirPaths[i]))
             {
-                //throw an "folder doesnt exist" excpetion
+                //throw a "folder doesnt exist" excpetion
                 std::cout << "Error: folder doesn't exist"<<std::endl;
                 return;
             }
             else
             {
-                const size_t size = 1024;
-                char buff[size];
-                _getcwd(buff, size);
-                std::string path = buff + dirPaths[i];
-                std::filesystem::current_path(path);
+                std::filesystem::path newPath = std::filesystem::current_path() / dirPaths[i];
+
+                if (std::filesystem::exists(newPath) && std::filesystem::is_directory(newPath)) 
+                {
+                    std::filesystem::current_path(newPath);
+                }
+                else {
+                    std::cout << "Error: folder '" << dirPaths[i] << "' doesn't exist" << std::endl;
+                    return;
+                }
             }
         }
     }

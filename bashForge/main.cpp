@@ -719,6 +719,7 @@ void analyse_input(const std::string& input)
 		else
 			throw(CMD_DOESNT_EXIST);
 
+
 	}
 	
 	catch (int errCode)
