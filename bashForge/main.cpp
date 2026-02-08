@@ -734,6 +734,7 @@ void analyse_input(const std::string& input)
 		case UNABLE_TO_SET_FT: std::cout << "Unable to set file time from file, please try again\n"; break;
 		}
 	}
+
 }
 
 int main()
