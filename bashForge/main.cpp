@@ -9,8 +9,48 @@
 #include "DateParser.h"
 #include "CommandCd.h"
 #include <fstream>
+#include <algorithm> 
 
+void history(const std::string& input)
+{
+	std::ifstream file("C:\\Users\\Cyber_User\\source\\repos\\bashForge\\bashForge\\history.txt");
+	if (!file.is_open()) {
+		std::cerr << "Error opening file: "<< std::endl;
+		return;
+	}
+	std::vector<std::string> lines;
+	std::string line;
+	int len;
+	int readLine=0;
+	if (input[0] == '!')
+	{
+		
+		if (input[1] == '!')
+			readLine = 1;
+		else
+			readLine = int(input[1])-'0';
+	}
+	if(input=="")
+		len = 0;
+	while (std::getline(file, line))
+	{
+		if (!line.empty())
+			lines.push_back(line);
+	}
+	file.close();
 
+	if (!input.empty() && std::all_of(input.begin(), input.end(), ::isdigit)) {
+		readLine = std::stoi(input);
+	}
+
+	int start_index = (std::max)(0, static_cast<int>(lines.size()) - readLine);
+
+	for (int i = start_index; i < lines.size(); ++i)
+	{
+		std::cout << "  " << (i + 1) << "  " << lines[i] << std::endl;
+	}
+
+}
 std::vector<std::string> getCmdSyntax(const std::string& input)
 {
 	if (input.empty())
@@ -712,8 +752,17 @@ void analyse_input(const std::string& input)
 			CommandCd cd;
 			cd.cd(dirToReach);
 		}
+		else if (cmdRes[0] == "history")
+		{
+			if (cmdRes.size() == 1)
+				history("");
+			else
+				history(cmdRes[1]);
+		}
 		else if (cmdRes[0] == "exit")
 		{
+			std::ofstream outFile("C:\\Users\\Cyber_User\\source\\repos\\bashForge\\bashForge\\history.txt", std::ios::app);
+			outFile << input << std::endl;
 			return;
 		}
 		else
@@ -735,6 +784,8 @@ void analyse_input(const std::string& input)
 		}
 	}
 
+	std::ofstream outFile("C:\\Users\\Cyber_User\\source\\repos\\bashForge\\bashForge\\history.txt", std::ios::app);
+	outFile << input << std::endl;
 }
 
 int main()
