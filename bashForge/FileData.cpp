@@ -112,7 +112,7 @@ void FileData::countLinks()
 		hForFile = CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, nullptr);
 	if (hForFile == INVALID_HANDLE_VALUE)
 	{
-		std::cout << "SYSTEM ERROR WHILE FETCHING LINKS\n\n";
+		std::cout << "--\n\n";
 	}
 
 	BY_HANDLE_FILE_INFORMATION info;

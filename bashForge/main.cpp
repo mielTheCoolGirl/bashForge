@@ -7,6 +7,7 @@
 #define UNABLE_TO_SET_FT -4
 #include "FileData.h"
 #include "DateParser.h"
+#include "CommandCd.h"
 #include <fstream>
 
 
@@ -699,12 +700,25 @@ void analyse_input(const std::string& input)
 			}
 
 		}
+		else if (cmdRes[0]=="cd")
+		{
+			std::string dirToReach;
+			if (cmdRes.size() > 2)
+				throw INVALID_CMD_SYNTAX;
+			if (cmdRes.size() == 1)
+				dirToReach = "";
+			else
+				dirToReach = cmdRes[1];
+			CommandCd cd;
+			cd.cd(dirToReach);
+		}
 		else if (cmdRes[0] == "exit")
 		{
 			return;
 		}
 		else
 			throw(CMD_DOESNT_EXIST);
+
 
 	}
 	

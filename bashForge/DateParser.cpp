@@ -162,7 +162,7 @@ SYSTEMTIME DateParser::parse_touch_t(const std::string& t)
 	{
 		int yy;
 		sscanf_s(mainPart.c_str(), "%2d%2d%2d%2d%2d", &yy, &month, &day, &hour, &minute);
-		year = yy + 2000; //amking an assumption that we're starting from the year 2000
+		year = yy + 2000; //making an assumption that we're starting from the year 2000
 	}
 	else 
 	{
