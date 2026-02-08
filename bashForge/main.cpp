@@ -22,6 +22,7 @@ void history(const std::string& input)
 	std::string line;
 	int len;
 	int readLine=0;
+	//EXECUTE THE ! COMMANDS
 	if (input[0] == '!')
 	{
 		
